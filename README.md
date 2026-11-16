@@ -75,6 +75,10 @@ BASE=http://localhost:5180/ pnpm ui-check   # against `pnpm dev` instead
 
 ## Using statestorm in a domain repo
 
+**New to it? [docs/getting-started.md](docs/getting-started.md) walks you from an empty folder to a
+domain repo that runs, checks itself, records its decisions and can be shared.** What follows is the
+reference.
+
 A domain lives in a repository of its own, whose root is a **domain folder**: `model.yaml`,
 `scenarios/`, `drawings/` (with `issues.yaml`), and its decisions in `docs/` (below). It installs this
 repo as a **git dependency** â€” no registry needed: installing runs `prepare`, which builds the
@@ -250,7 +254,8 @@ model-authoring, scenario-loop, capture-drawing, model-check, platform-change â€
 
 ## Find your way
 
-**Picking this up fresh?** [BACKLOG.md](BACKLOG.md) is what is being worked on and what is next. Then
+**Modelling your own domain?** Start with [docs/getting-started.md](docs/getting-started.md).
+**Working on statestorm itself?** [BACKLOG.md](BACKLOG.md) is what is being worked on and what is next. Then
 [docs/requirements.md](docs/requirements.md) and [docs/design.md](docs/design.md); the decisions are
 in [docs/adr/](docs/adr/) and what is still undecided is in [docs/open-questions.md](docs/open-questions.md).
 

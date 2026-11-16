@@ -21,8 +21,8 @@ the UI shows the same runs as an overview, a flow board, a structure (ERD) and s
 ## Where a model's things live
 
 A real domain lives in **a repository of its own** — one platform repo, one repo per domain — whose
-root is the domain folder; it installs this repo as a git dependency on a tag (README, "Using
-statestorm in a domain repo").
+root is the domain folder; it installs this repo as a git dependency (README, "Using statestorm
+in a domain repo"; a newcomer's walk-through is [docs/getting-started.md](docs/getting-started.md)).
 
 | What | In a domain repo | Here, for the neutral examples |
 |---|---|---|
