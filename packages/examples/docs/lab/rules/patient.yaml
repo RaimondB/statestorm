@@ -1,0 +1,22 @@
+# yaml-language-server: $schema=../.schemas/rules.schema.json
+title: What the patient is told
+canvas:
+  purpose: what the patient hears about their request
+  packages: [Patient]
+rules:
+  - id: R15
+    title: The patient hears about the request, forward only
+    kind: behavioural
+    status: agreed
+    decided: { session: 1, date: 2026-03-02 }
+    text: >-
+      The patient is told about their request, never about one tube, and only forward: a later
+      milestone is never followed by an earlier one, so a late "in transit" cannot follow "at the
+      lab". A repeat is told once.
+  - id: R16
+    title: A failed request means a new sample is needed
+    kind: behavioural
+    status: to-confirm
+    refines: [R15]
+    decided: { session: 1, date: 2026-03-02 }
+    text: When a request fails, the patient is told a new sample is needed; the doctor will ask again.

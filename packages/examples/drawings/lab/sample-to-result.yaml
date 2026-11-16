@@ -1,0 +1,41 @@
+# The lab's own picture of a sample's way, from the clinic to the result — an invented drawing,
+# captured the way a business's drawing is (skill capture-drawing), so the check can compare it
+# with what the scenarios show.
+drawing: From sample to result
+source: invented for the example, 2026-10-21
+lanes:
+  Clinic: [Drawn, Packed]
+  Courier: [Picked up, Delivered, Lost in transit]
+  Lab: [Received, Rejected, Haemolysed, In the queue, Analysed, Too old to run, Result released, Result amended]
+names:
+  Drawn: Collected
+  Lost in transit: Missing
+  In the queue: Queued
+  Too old to run: StabilityExpired
+  Result released: Released
+unmodelled:
+  Result amended: the lab corrects a released result — not in the model yet
+paths:
+  main: { colour: black }
+  referral: { colour: orange, meaning: sent on to the reference lab }
+customer:
+  notice: PatientInformed
+  boxes: [Drawn, Picked up, Received, Result released, Rejected, Haemolysed, Too old to run]
+arrows:
+  - Drawn -> Packed
+  - Drawn -> Picked up                                 # the courier packs it
+  - Packed -> Picked up
+  - Picked up -> Delivered
+  - Picked up -> Lost in transit
+  - Lost in transit -> Delivered                       # found
+  - Delivered -> Received
+  - Received -> In the queue
+  - In the queue -> Analysed
+  - Received -> Analysed                               # run at once
+  - Analysed -> Result released
+  - Received -> Haemolysed
+  - Delivered -> Rejected                             # no label: refused at the desk
+  - In the queue -> Too old to run: { no: "queued is on the analyser, kept cool — the clock stops (L-2)" }
+  - Haemolysed -> Drawn: { open: "Q-1 — is a redraw a new sample, or the same one again?" }
+  - Result released -> Result amended: { later: "amended results, a later slice" }
+  - Received -> Packed: { path: referral }

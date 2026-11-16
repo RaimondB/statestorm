@@ -1,0 +1,16 @@
+# An agenda (ADR 0025): the scenarios a meeting walks, under its topics, in order — the first of each
+# item its story, the rest its variants.
+title: Ward review — from the ward to the result
+date: 2026-11-20
+scope: [happy, deviation]
+view: overview
+items:
+  - title: The sample's way — collected, couriered, analysed, released
+    scenarios: [01, 07]
+    note: The plain flow first, then the tube that skips the courier.
+  - title: When a sample cannot be used
+    scenarios: [02, 05, 04]
+    note: One tube haemolysed, then one of two — what the ward hears in each case.
+    questions: [Q-1]
+  - title: Lost on the way
+    scenarios: [03]

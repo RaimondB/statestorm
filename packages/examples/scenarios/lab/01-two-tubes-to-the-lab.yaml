@@ -1,0 +1,61 @@
+# The whole happy flow: two tubes drawn at the clinic, taken by courier to the lab, and each
+# analysed by its own department — the serum tube by chemistry, the EDTA tube by haematology. The
+# route branches after the courier, so the overview draws the two departments side by side.
+scenario: two tubes to the lab — collected, couriered, analysed, released
+drawing: sample-to-result
+tags: [happy]
+why: [R1, R4, R5, R7, R13, R15]
+given:
+  at: 2026-03-02T08:00:00Z
+  phase: Planning
+  send:
+    - Request#R1.Create: { patient: P1, samples: [S1, S2] }
+    - Route#R1-LAB1.Plan: { request: R1, lab: LAB1, tubes: [ { sample: S1, tube: serum }, { sample: S2, tube: edta } ] }
+    - SiteVisit#R1-CLIN1.Plan: { route: R1-LAB1, site: CLIN1, samples: [S1, S2] }
+    - CourierRun#R1-C1.Plan: { route: R1-LAB1, origin: CLIN1, destination: LAB1, by: courier 7, samples: [S1, S2] }
+    - Analysis#R1-CHEM.Plan: { route: R1-LAB1, site: LAB1, department: chemistry, stability: 8h, samples: [S1] }
+    - Analysis#R1-HAEM.Plan: { route: R1-LAB1, site: LAB1, department: haematology, stability: 24h, samples: [S2] }
+    - Route#R1-LAB1.Link: { link: R1-C1-after-CLIN1, before: "SiteVisit#R1-CLIN1", after: "CourierRun#R1-C1" }
+    - Route#R1-LAB1.Link: { link: R1-CHEM-after-C1, before: "CourierRun#R1-C1", after: "Analysis#R1-CHEM" }
+    - Route#R1-LAB1.Link: { link: R1-HAEM-after-C1, before: "CourierRun#R1-C1", after: "Analysis#R1-HAEM" }
+    - Route#R1-LAB1.Instruct: { kind: temperature, detail: keep at room temperature }
+when:
+  - phase: At the clinic
+  - send: { Sample#S1.Scan: { scanId: c-S1, event: Collected, site: CLIN1 } }
+  - send: { Sample#S2.Scan: { scanId: c-S2, event: Collected, site: CLIN1 } }
+  - send: { Sample#S1.Scan: { scanId: p-S1, event: Packed, site: CLIN1 } }
+  - send: { Sample#S2.Scan: { scanId: p-S2, event: Packed, site: CLIN1 } }
+  - expect_state:
+      SiteVisit#R1-CLIN1: in_progress
+      PatientView#R1: journey.collected
+  - phase: The courier
+  - send: { Sample#S1.Scan: { scanId: u-S1, event: PickedUp, site: CLIN1 } }
+  - send: { Sample#S2.Scan: { scanId: u-S2, event: PickedUp, site: CLIN1 } }
+  - expect_state:                                # one scan completes the clinic's outbound and the courier's pickup
+      SiteVisit#R1-CLIN1: completed
+      TransferTask#R1-C1-pickup: completed
+  - advance: 40m
+  - send: { Sample#S1.Scan: { scanId: d-S1, event: Delivered, site: LAB1 } }
+  - send: { Sample#S2.Scan: { scanId: d-S2, event: Delivered, site: LAB1 } }
+  - expect_state: { CourierRun#R1-C1: completed }
+  - phase: At the lab
+  - send: { Sample#S1.Scan: { scanId: r-S1, event: Received, site: LAB1 } }
+  - send: { Sample#S2.Scan: { scanId: r-S2, event: Received, site: LAB1 } }
+  - send: { Sample#S1.Scan: { scanId: q-S1, event: Queued, site: LAB1 } }
+  - send: { Sample#S2.Scan: { scanId: q-S2, event: Queued, site: LAB1 } }
+  - advance: 1h
+  - send: { Sample#S1.Scan: { scanId: a-S1, event: Analysed, site: LAB1 } }
+  - send: { Sample#S2.Scan: { scanId: a-S2, event: Analysed, site: LAB1 } }
+  - phase: Results
+  - send: { Sample#S1.Scan: { scanId: x-S1, event: Released, site: LAB1 } }
+  - send: { Sample#S2.Scan: { scanId: x-S2, event: Released, site: LAB1 } }
+then:
+  - state:
+      Analysis#R1-CHEM: completed
+      Analysis#R1-HAEM: completed
+      Route#R1-LAB1: completed
+      Request#R1: completed
+      PatientView#R1: results_ready
+  - emitted_count: { PatientInformed: 5 }        # ordered, collected, in transit, at the lab, results ready
+  - not_emitted: [StabilityExpired, SampleStopped]
+  - no_findings: [error, warning]

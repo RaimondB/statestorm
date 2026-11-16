@@ -1,0 +1,37 @@
+# The sample is received, but the analyser is down: the run does not start within the sample's
+# stability (4h, from the moment the run expects it — ADR 0014). The run fails on its own, the
+# report is no longer needed, and the patient needs a new sample.
+scenario: stability expired before the run — the run fails, the report is not needed
+drawing: sample-to-result
+tags: [deviation, expired]
+why: [R2, R3, R10, R16, TP-4]
+given:
+  at: 2026-03-02T08:00:00Z
+  phase: Planning
+  send:
+    - Request#R4.Create: { patient: P4, samples: [S5] }
+    - Route#R4-LAB1.Plan: { request: R4, lab: LAB1, tubes: [ { sample: S5, tube: serum } ] }
+    - SiteVisit#R4-CLIN1.Plan: { route: R4-LAB1, site: CLIN1, samples: [S5] }
+    - CourierRun#R4-C1.Plan: { route: R4-LAB1, origin: CLIN1, destination: LAB1, by: courier 7, samples: [S5] }
+    - Analysis#R4-CHEM.Plan: { route: R4-LAB1, site: LAB1, department: chemistry, stability: 4h, samples: [S5] }
+when:
+  - phase: To the lab
+  - send: { Sample#S5.Scan: { scanId: c-S5, event: Collected, site: CLIN1 } }
+  - send: { Sample#S5.Scan: { scanId: p-S5, event: Packed, site: CLIN1 } }
+  - send: { Sample#S5.Scan: { scanId: u-S5, event: PickedUp, site: CLIN1 } }
+  - advance: 40m
+  - send: { Sample#S5.Scan: { scanId: d-S5, event: Delivered, site: LAB1 } }
+  - send: { Sample#S5.Scan: { scanId: r-S5, event: Received, site: LAB1 } }
+  - expect_state: { AnalysisHandling#R4-CHEM-run-S5: open.expected.ageing }
+  - phase: Too late
+  - advance: 4h
+then:
+  - state:
+      AnalysisHandling#R4-CHEM-run-S5: failed
+      AnalysisTask#R4-CHEM-report: not_needed
+      Analysis#R4-CHEM: failed                       # the run, its middle stage, is the latest reached
+      Request#R4: failed
+      PatientView#R4: redraw_needed
+  - emitted: [StabilityExpired]
+  - not_emitted: [Analysed, Released]
+  - no_findings: [error, warning]

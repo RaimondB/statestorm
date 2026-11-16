@@ -1,0 +1,10 @@
+# yaml-language-server: $schema=.schemas/profile.schema.json
+# What the lab adds to the formats every domain shares (ADR 0016 §8).
+fields:
+  rule:
+    release: { description: the release of the lab system it is built in, enum: ["1", "2"] }
+  term:
+    scan: { description: "the scan that records it, as the scanners send it", vocabulary: vocab/scans.yaml }
+external:
+  TP: { title: the lab's test plan }
+topics: [requests, steps, transfers, samples, analysis, patient]

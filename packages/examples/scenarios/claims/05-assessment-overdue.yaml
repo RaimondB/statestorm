@@ -1,0 +1,20 @@
+# Two deadlines at different depths, both armed by the same moment: the 7-day visit
+# deadline (depth 4) fires first and moves sideways; the 30-day one on `assessment`
+# (depth 2) survives that move and then pulls the claim into a deep sibling.
+scenario: an assessment that drags on is forced to a decision
+given:
+  at: 2026-01-01T09:00:00Z
+  send:
+    - Claim#O1.Submit: { amount: 5000 }
+    - Claim#O1.DocumentsReceived: { batchId: o1-docs, count: 3 }
+    - Claim#O1.Assess: {}
+    - Claim#O1.VisitScheduled: {}
+when:
+  - advance: 7d
+  - expect_state: { Claim#O1: handling.assessment.investigation.scheduling }
+  - advance: 23d
+then:
+  - state: { Claim#O1: handling.assessment.decision.pending }
+  - emitted: [VisitMissed, AssessmentOverdue]
+  - not_in_state: { Claim#O1: handling.assessment.investigation }
+  - no_findings: [error, warning]

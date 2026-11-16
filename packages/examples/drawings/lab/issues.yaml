@@ -1,0 +1,33 @@
+# Changes to the drawings, for the people who own them — found by comparing the drawings with the
+# model and its scenarios. `pnpm check --issues` prints them.
+#
+#   drawings: the files they concern (all: every drawing)
+#   says:     what the drawing shows now
+#   should:   what the model does
+#   why:      the decision behind it
+#   status:   open | to confirm | confirmed | done
+#   arrows:   the arrows it raises, in the model's statuses (`From -> To`) — an arrow a drawing's
+#             own scenarios walk that it does not draw is then "raised", not a warning (MC-14)
+issues:
+  - id: L-1
+    drawings: [hospital-ward]
+    says: Received -> Analysed, with no queue in between
+    should: Received -> In the queue -> Analysed, as on the lab's own drawing — a stat tube is queued too
+    why: the analysers queue every tube; the ward's drawing was made before the queue scan existed
+    status: to confirm
+    arrows: ["Received -> Queued", "Queued -> Analysed"]
+
+  - id: L-2
+    drawings: [sample-to-result]
+    says: Too old to run from the queue
+    should: Too old to run from Received, before the queue — once queued, the tube is on the analyser, kept cool, and no longer ages
+    why: the stability deadline is on the run step until the analyser has the tube (ADR 0014)
+    status: to confirm
+    arrows: ["Received -> StabilityExpired"]
+
+  - id: L-3
+    drawings: [all]
+    says: no way back after Haemolysed
+    should: Haemolysed -> Drawn, once Q-1 is answered — a redraw
+    why: Q-1 open
+    status: open

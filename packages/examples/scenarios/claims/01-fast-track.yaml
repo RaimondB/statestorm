@@ -1,0 +1,18 @@
+# A small claim skips investigation by targeting a final state two levels down, and the
+# completion then chains outward: done.decision -> payout -> paid -> done.handling -> closed.
+scenario: a small claim is fast-tracked through to payment
+given:
+  at: 2026-01-01T09:00:00Z
+  send:
+    - Claim#S1.Submit: { amount: 500 }
+when:
+  - expect_state: { Claim#S1: handling.intake.awaiting_documents }
+  - send: { Claim#S1.DocumentsReceived: { batchId: s1-docs, count: 3 } }
+  - expect_state: { Claim#S1: handling.assessment.triage }   # done.intake moved it on
+  - send: { Claim#S1.Assess: {} }
+then:
+  - state: { Claim#S1: closed, Payment#S1: sent }
+  - data: { Claim#S1: { route: fast track } }
+  - emitted: [ClaimApproved, PayoutRequested, PaymentSent, ClaimClosed]
+  - not_emitted: [InvestigationReported]
+  - no_findings: [error, warning]

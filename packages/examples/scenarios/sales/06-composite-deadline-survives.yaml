@@ -1,0 +1,17 @@
+# The 30-day deadline is declared on `fulfilling` and so survives the move from
+# awaiting_payment to shipping, while the 14-day one is cancelled by leaving its own state.
+# This pair is the concrete reason nesting earns its complexity — ADR 0005 §5.
+scenario: the fulfilment deadline outlives the payment deadline
+given:
+  at: 2026-01-01T09:00:00Z
+  send:
+    - Order#F1.Place: { total: 100, items: [widget] }
+    - Order#F1.Pay: { paymentId: p100, amount: 100 }
+when:
+  - expect_state: { Order#F1: fulfilling.shipping }
+  - advance: 30d
+then:
+  - state: { Order#F1: escalated }
+  - emitted: [FulfilmentOverdue]
+  - not_emitted: [OrderCancelled]        # the 14d deadline died with awaiting_payment
+  - no_findings: [error, warning]

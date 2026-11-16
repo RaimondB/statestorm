@@ -1,0 +1,42 @@
+# Two serum tubes for chemistry; one is haemolysed and confirmed. The other is analysed and
+# released. The department did half its work: partly completed — and so are the route and the
+# request. The patient hears the results are ready: those there are.
+scenario: one of two tubes haemolysed — the other is reported, the request partly completed
+drawing: sample-to-result
+tags: [deviation, haemolysed]
+why: [R3, R5]
+given:
+  at: 2026-03-02T08:00:00Z
+  phase: Planning
+  send:
+    - Request#R5.Create: { patient: P5, samples: [S6, S7] }
+    - Route#R5-LAB1.Plan: { request: R5, lab: LAB1, tubes: [ { sample: S6, tube: serum }, { sample: S7, tube: serum } ] }
+    - SiteVisit#R5-CLIN1.Plan: { route: R5-LAB1, site: CLIN1, samples: [S6, S7] }
+    - CourierRun#R5-C1.Plan: { route: R5-LAB1, origin: CLIN1, destination: LAB1, by: courier 7, samples: [S6, S7] }
+    - Analysis#R5-CHEM.Plan: { route: R5-LAB1, site: LAB1, department: chemistry, stability: 8h, samples: [S6, S7] }
+when:
+  - phase: To the lab
+  - send: { Sample#S6.Scan: { scanId: c-S6, event: Collected, site: CLIN1 } }
+  - send: { Sample#S7.Scan: { scanId: c-S7, event: Collected, site: CLIN1 } }
+  - send: { Sample#S6.Scan: { scanId: p-S6, event: Packed, site: CLIN1 } }
+  - send: { Sample#S6.Scan: { scanId: u-S6, event: PickedUp, site: CLIN1 } }
+  - send: { Sample#S7.Scan: { scanId: p-S7, event: Packed, site: CLIN1 } }
+  - send: { Sample#S7.Scan: { scanId: u-S7, event: PickedUp, site: CLIN1 } }
+  - send: { Sample#S6.Scan: { scanId: d-S6, event: Delivered, site: LAB1 } }
+  - send: { Sample#S7.Scan: { scanId: d-S7, event: Delivered, site: LAB1 } }
+  - send: { Sample#S6.Scan: { scanId: r-S6, event: Received, site: LAB1 } }
+  - send: { Sample#S7.Scan: { scanId: r-S7, event: Received, site: LAB1 } }
+  - phase: One haemolysed
+  - send: { Sample#S7.Scan: { scanId: h-S7, event: Haemolysed, site: LAB1, reason: red serum } }
+  - send: { SampleDeviation#h-S7.Confirm: {} }
+  - phase: The other reported
+  - send: { Sample#S6.Scan: { scanId: a-S6, event: Analysed, site: LAB1 } }
+  - send: { Sample#S6.Scan: { scanId: x-S6, event: Released, site: LAB1 } }
+then:
+  - state:
+      AnalysisTask#R5-CHEM-run: partially_completed
+      Analysis#R5-CHEM: partially_completed
+      Route#R5-LAB1: partially_completed
+      Request#R5: partially_completed
+      PatientView#R5: results_ready
+  - no_findings: [error, warning]

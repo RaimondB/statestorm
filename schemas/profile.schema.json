@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "statestorm/profile.schema.json",
+  "title": "A domain's profile",
+  "description": "docs/profile.yaml in a domain folder: what this domain adds to the base formats of its rules, glossary and questions — never a change to them (ADR 0016 §8). The platform validates and shows the fields; it never knows what they mean.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "fields": {
+      "type": "object",
+      "description": "Extra fields, per format. A name may not be one of the base format's own fields.",
+      "additionalProperties": false,
+      "properties": {
+        "rule": { "$ref": "#/$defs/fields" },
+        "term": { "$ref": "#/$defs/fields" },
+        "question": { "$ref": "#/$defs/fields" }
+      }
+    },
+    "external": {
+      "type": "object",
+      "description": "The prefixes of outside lists the domain cites — a test plan, a ticket system — so `why:` and tags with one (TP-12) are references, not typos. The key is the prefix, before the dash.",
+      "propertyNames": { "pattern": "^[A-Za-z][A-Za-z0-9]*$" },
+      "additionalProperties": {
+        "type": "object",
+        "required": ["title"],
+        "additionalProperties": false,
+        "properties": {
+          "title": { "type": "string", "description": "What the list is (the test plan)." },
+          "url": { "type": "string", "description": "Where an item is, with {id} for the item's id; the rulebook links it." }
+        }
+      }
+    },
+    "topics": {
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true,
+      "description": "The order the rulebook reads in, by topic file name (without .yaml). Topics not named follow, by file name."
+    }
+  },
+  "$defs": {
+    "fields": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[a-z][A-Za-z0-9]*$" },
+      "additionalProperties": { "$ref": "#/$defs/field" }
+    },
+    "field": {
+      "type": "object",
+      "required": ["description"],
+      "additionalProperties": false,
+      "properties": {
+        "description": { "type": "string", "description": "What the field means — shown in the editor and the rulebook." },
+        "type": { "enum": ["string", "number", "boolean"], "default": "string" },
+        "list": { "type": "boolean", "default": false, "description": "A list of values rather than one." },
+        "enum": { "type": "array", "items": { "type": ["string", "number", "boolean"] }, "minItems": 1, "uniqueItems": true, "description": "The values allowed." },
+        "vocabulary": { "type": "string", "description": "A YAML file, relative to docs/, listing the values allowed — for a controlled vocabulary too long for `enum`, such as an industry standard's: `values: [{ value, definition }]`." },
+        "required": { "type": "boolean", "default": false }
+      },
+      "not": { "required": ["enum", "vocabulary"] }
+    }
+  }
+}

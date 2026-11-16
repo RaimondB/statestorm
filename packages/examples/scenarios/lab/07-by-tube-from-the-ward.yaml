@@ -1,0 +1,34 @@
+# A ward in the hospital sends an urgent (stat) tube to the lab through the pneumatic tube system:
+# no courier, but picked up and delivered all the same — the tube run plans the same two tasks as
+# a courier run.
+scenario: by tube from the ward — a stat sample, no courier
+drawing: hospital-ward
+tags: [happy, tube]
+why: [R13]
+given:
+  at: 2026-03-02T08:00:00Z
+  phase: Planning
+  send:
+    - Request#R7.Create: { patient: P7, samples: [S9] }
+    - Route#R7-LAB1.Plan: { request: R7, lab: LAB1, priority: stat, tubes: [ { sample: S9, tube: edta } ] }
+    - SiteVisit#R7-W3.Plan: { route: R7-LAB1, site: W3, samples: [S9] }
+    - TubeRun#R7-T1.Plan: { route: R7-LAB1, origin: W3, destination: LAB1, samples: [S9] }
+    - Analysis#R7-HAEM.Plan: { route: R7-LAB1, site: LAB1, department: haematology, stability: 24h, samples: [S9] }
+when:
+  - phase: On the ward
+  - send: { Sample#S9.Scan: { scanId: c-S9, event: Collected, site: W3 } }
+  - send: { Sample#S9.Scan: { scanId: u-S9, event: PickedUp, site: W3 } }
+  - phase: Through the tube
+  - send: { Sample#S9.Scan: { scanId: d-S9, event: Delivered, site: LAB1 } }
+  - expect_state: { TubeRun#R7-T1: completed }
+  - phase: At the lab
+  - send: { Sample#S9.Scan: { scanId: r-S9, event: Received, site: LAB1 } }
+  - send: { Sample#S9.Scan: { scanId: q-S9, event: Queued, site: LAB1 } }
+  - send: { Sample#S9.Scan: { scanId: a-S9, event: Analysed, site: LAB1 } }
+  - send: { Sample#S9.Scan: { scanId: x-S9, event: Released, site: LAB1 } }
+then:
+  - state:
+      Request#R7: completed
+      PatientView#R7: results_ready
+  - data: { Route#R7-LAB1: { priority: stat }, TubeRun#R7-T1: { by: tube } }
+  - no_findings: [error, warning]

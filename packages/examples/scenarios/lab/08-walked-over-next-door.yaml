@@ -1,0 +1,30 @@
+# The clinic shares a building with the lab: a nurse walks the tube over. No transfer at all —
+# Delivered at the lab completes the clinic's own outbound, so on the flow board it sits in the
+# sender's lane here, and in the transport's everywhere else.
+scenario: walked over next door — delivered completes the clinic's outbound, no transfer
+drawing: hospital-ward
+tags: [happy, same-building]
+why: [R14]
+given:
+  at: 2026-03-02T08:00:00Z
+  phase: Planning
+  send:
+    - Request#R8.Create: { patient: P8, samples: [S10] }
+    - Route#R8-LAB1.Plan: { request: R8, lab: LAB1, tubes: [ { sample: S10, tube: serum } ] }
+    - SiteVisit#R8-CLIN2.Plan: { route: R8-LAB1, site: CLIN2, samples: [S10] }
+    - Analysis#R8-CHEM.Plan: { route: R8-LAB1, site: LAB1, department: chemistry, stability: 8h, samples: [S10] }
+when:
+  - phase: Next door
+  - send: { Sample#S10.Scan: { scanId: c-S10, event: Collected, site: CLIN2 } }
+  - send: { Sample#S10.Scan: { scanId: d-S10, event: Delivered, site: LAB1 } }
+  - expect_state: { SiteVisit#R8-CLIN2: completed }
+  - phase: At the lab
+  - send: { Sample#S10.Scan: { scanId: r-S10, event: Received, site: LAB1 } }
+  - send: { Sample#S10.Scan: { scanId: a-S10, event: Analysed, site: LAB1 } }
+  - send: { Sample#S10.Scan: { scanId: x-S10, event: Released, site: LAB1 } }
+then:
+  - state:
+      Request#R8: completed
+      PatientView#R8: results_ready
+  - not_emitted: [PickedUp]
+  - no_findings: [error, warning]

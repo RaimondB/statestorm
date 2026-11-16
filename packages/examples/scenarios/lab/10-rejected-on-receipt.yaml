@@ -1,0 +1,33 @@
+# The tube arrives without a label: the lab rejects it on receipt. That is no deviation — there is
+# nothing for a person to decide — so the receiving step fails at once, the sample stops, the
+# later steps are no longer needed, and the patient needs a new sample.
+scenario: rejected on receipt — an unlabelled tube fails the step at once
+drawing: sample-to-result
+tags: [deviation, rejected]
+why: [R9]
+given:
+  at: 2026-03-02T08:00:00Z
+  phase: Planning
+  send:
+    - Request#R10.Create: { patient: P10, samples: [S13] }
+    - Route#R10-LAB1.Plan: { request: R10, lab: LAB1, tubes: [ { sample: S13, tube: serum } ] }
+    - SiteVisit#R10-CLIN1.Plan: { route: R10-LAB1, site: CLIN1, samples: [S13] }
+    - CourierRun#R10-C1.Plan: { route: R10-LAB1, origin: CLIN1, destination: LAB1, by: courier 7, samples: [S13] }
+    - Analysis#R10-CHEM.Plan: { route: R10-LAB1, site: LAB1, department: chemistry, stability: 8h, samples: [S13] }
+when:
+  - phase: To the lab
+  - send: { Sample#S13.Scan: { scanId: c-S13, event: Collected, site: CLIN1 } }
+  - send: { Sample#S13.Scan: { scanId: p-S13, event: Packed, site: CLIN1 } }
+  - send: { Sample#S13.Scan: { scanId: u-S13, event: PickedUp, site: CLIN1 } }
+  - send: { Sample#S13.Scan: { scanId: d-S13, event: Delivered, site: LAB1 } }
+  - phase: Rejected
+  - send: { Sample#S13.Scan: { scanId: j-S13, event: Rejected, site: LAB1, reason: no label } }
+then:
+  - state:
+      AnalysisHandling#R10-CHEM-receive-S13: failed
+      AnalysisTask#R10-CHEM-run: not_needed
+      Analysis#R10-CHEM: failed
+      Request#R10: failed
+      PatientView#R10: redraw_needed
+  - not_emitted: [DeviationPending, Received]
+  - no_findings: [error, warning]

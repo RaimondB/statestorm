@@ -1,0 +1,36 @@
+# Two tubes; the second one's collection scan is uploaded late, after the first is already with
+# the courier, who packs the box at the door. The patient heard "in transit" — a late "collected" changes nothing they are told.
+scenario: a late scan never moves the patient back
+drawing: sample-to-result
+tags: [happy, mechanics]
+why: [R7, R15]
+given:
+  at: 2026-03-02T08:00:00Z
+  phase: Planning
+  send:
+    - Request#R9.Create: { patient: P9, samples: [S11, S12] }
+    - Route#R9-LAB1.Plan: { request: R9, lab: LAB1, tubes: [ { sample: S11, tube: serum }, { sample: S12, tube: serum } ] }
+    - SiteVisit#R9-CLIN1.Plan: { route: R9-LAB1, site: CLIN1, samples: [S11, S12] }
+    - CourierRun#R9-C1.Plan: { route: R9-LAB1, origin: CLIN1, destination: LAB1, by: courier 7, samples: [S11, S12] }
+    - Analysis#R9-CHEM.Plan: { route: R9-LAB1, site: LAB1, department: chemistry, stability: 8h, samples: [S11, S12] }
+when:
+  - phase: At the clinic
+  - send: { Sample#S11.Scan: { scanId: c-S11, event: Collected, site: CLIN1 } }
+  - send: { Sample#S11.Scan: { scanId: u-S11, event: PickedUp, site: CLIN1 } }
+  - expect_state: { PatientView#R9: journey.in_transit }
+  - send: { Sample#S12.Scan: { scanId: c-S12, event: Collected, site: CLIN1 } }    # uploaded late
+  - expect_state: { PatientView#R9: journey.in_transit }
+  - send: { Sample#S12.Scan: { scanId: u-S12, event: PickedUp, site: CLIN1 } }
+  - phase: At the lab
+  - send: { Sample#S11.Scan: { scanId: d-S11, event: Delivered, site: LAB1 } }
+  - send: { Sample#S12.Scan: { scanId: d-S12, event: Delivered, site: LAB1 } }
+  - send: { Sample#S11.Scan: { scanId: r-S11, event: Received, site: LAB1 } }
+  - send: { Sample#S12.Scan: { scanId: r-S12, event: Received, site: LAB1 } }
+  - send: { Sample#S11.Scan: { scanId: a-S11, event: Analysed, site: LAB1 } }
+  - send: { Sample#S12.Scan: { scanId: a-S12, event: Analysed, site: LAB1 } }
+  - send: { Sample#S11.Scan: { scanId: x-S11, event: Released, site: LAB1 } }
+  - send: { Sample#S12.Scan: { scanId: x-S12, event: Released, site: LAB1 } }
+then:
+  - state: { Request#R9: completed, PatientView#R9: results_ready }
+  - emitted_count: { PatientInformed: 5 }        # ordered, collected, in transit, at the lab, results ready — each once
+  - no_findings: [error, warning]

@@ -1,0 +1,12 @@
+node_modules/
+dist/
+dist-standalone/
+.turbo/
+coverage/
+*.local
+.DS_Store
+.env
+.env.*
+!.env.example
+.cache/
+.drawings/

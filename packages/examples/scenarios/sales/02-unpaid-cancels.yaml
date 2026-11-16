@@ -1,0 +1,15 @@
+scenario: an unpaid order cancels itself after fourteen days
+given:
+  at: 2026-01-01T09:00:00Z
+  send:
+    - Order#B1.Place: { total: 100, items: [widget] }
+when:
+  - advance: 13d
+  - expect_state: { Order#B1: fulfilling.awaiting_payment }
+  - advance: 1d
+then:
+  - state: { Order#B1: cancelled }
+  - not_in_state: { Order#B1: fulfilling }
+  - emitted: [OrderCancelled]
+  - not_emitted: [OrderPaid, ShipmentRequested, OrderCompleted]
+  - no_findings: [error, warning]

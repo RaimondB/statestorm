@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "A controlled vocabulary",
+  "description": "A file a profile's field names with `vocabulary:` (ADR 0016 §8): the values that field allows, each with what it means — an industry standard's list, or the domain's own.",
+  "type": "object",
+  "required": [
+    "title",
+    "values"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "What the list is, and which version of it."
+    },
+    "source": {
+      "type": "string",
+      "description": "Where it comes from — a standard and its release, a URL."
+    },
+    "values": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "value": {
+            "type": "string"
+          },
+          "definition": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

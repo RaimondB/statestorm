@@ -1,0 +1,139 @@
+# The reference model (R13). It is also the kernel's test fixture, so it is deliberately
+# exercising every semantic decision rather than being the smallest thing that runs.
+context: Sales
+
+aggregates:
+  Order:
+    creators: [Place]
+    data:
+      total: { type: number, default: 0 }
+      paid:  { type: number, default: 0 }
+    children:
+      lines: { type: OrderLine, via: command.orderId }
+
+    initial: draft
+    states:
+      draft:
+        on:
+          Place:
+            guard: command.total > 0
+            assign: { total: command.total }
+            target: fulfilling                      # lands on fulfilling.awaiting_payment
+            emit:
+              - OrderPlaced: { orderId: "${id}", items: "${command.items}" }
+
+      fulfilling:                                   # composite — ADR 0005
+        initial: awaiting_payment
+        after:
+          # Scoped to the composite, so it survives the move to `shipping`. This is the
+          # thing flat states cannot express.
+          30d:
+            target: escalated
+            emit: [ FulfilmentOverdue: { orderId: "${id}" } ]
+        on:
+          Cancel:                                   # written once, applies from any substate
+            target: cancelled
+            emit: [ OrderCancelled: { reason: requested } ]
+        on_done:                                    # reacts to done.fulfilling
+          target: completed
+          emit: [ OrderCompleted: { orderId: "${id}" } ]
+        states:
+          awaiting_payment:
+            after:
+              14d:
+                target: cancelled
+                emit: [ OrderCancelled: { reason: unpaid } ]
+            on:
+              # `paid` accumulates, which is the one shape a redelivery corrupts, so the
+              # payment's own identity decides whether this has already been applied.
+              # ADR 0006 §3.
+              Pay:
+                idempotency: command.paymentId
+                guard: paid + command.amount >= total
+                assign: { paid: paid + command.amount }
+                target: fulfilling.shipping
+                emit: [ OrderPaid: { orderId: "${id}" } ]
+              Pay#partial:                          # same command, different guard, no target
+                idempotency: command.paymentId
+                assign: { paid: paid + command.amount }
+                emit:
+                  - PaymentReceived: { orderId: "${id}", amount: "${command.amount}" }
+          shipping:
+            on_children:                            # quantifiers over the tally — ADR 0004
+              lines.first_entering(shipped):
+                emit: [ OrderPartiallyShipped: { orderId: "${id}" } ]
+              lines.all_final:
+                target: fulfilling.delivered
+          delivered: { final: true }                # completes `fulfilling` -> done.fulfilling
+
+      escalated: {}
+      completed: { final: true }
+      cancelled: { final: true }
+
+  OrderLine:
+    creators: [Create]
+    data:
+      orderId: { type: string }
+      sku:     { type: string }
+    initial: pending
+    states:
+      pending:
+        on:
+          Create:                                   # no target: an internal transition
+            assign: { orderId: command.orderId, sku: command.sku }
+          Ship:
+            target: shipped
+            emit: [ LineShipped: { orderId: "${orderId}", sku: "${sku}" } ]
+      shipped: { final: true }
+
+  Warehouse:
+    creators: [Reserve]
+    initial: idle
+    states:
+      idle:
+        on:
+          Reserve:
+            emit: [ StockReserved: { orderId: "${command.orderId}" } ]
+
+  Shipment:
+    creators: [Request]
+    initial: none
+    states:
+      none:
+        on:
+          Request:
+            target: requested
+            emit: [ ShipmentRequested: { orderId: "${id}" } ]
+      requested: {}
+
+policies:
+  # Stateless sugar — a single-state policy. Fan-out is the one place the expression
+  # language meets collections (R47).
+  explode_order_into_lines:
+    on: OrderPlaced
+    for_each: event.items
+    command: "OrderLine#${event.orderId}-${item}.Create"
+    with: { orderId: "${event.orderId}", sku: "${item}" }
+
+  reserve_stock_when_placed:
+    on: OrderPlaced
+    command: "Warehouse#main.Reserve"
+    with: { orderId: "${event.orderId}" }
+
+  # Stateful, correlated — the AND-join that a one-liner cannot express (ADR 0003).
+  ship_when_ready:
+    correlate: event.orderId
+    initial: waiting
+    states:
+      waiting:
+        on:
+          OrderPaid:     { target: paid_only }
+          StockReserved: { target: stock_only }
+      paid_only:
+        on: { StockReserved: { target: ready } }
+      stock_only:
+        on: { OrderPaid: { target: ready } }
+      ready:
+        final: true
+        on_entry:
+          command: "Shipment#${correlation}.Request"

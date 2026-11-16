@@ -1,0 +1,31 @@
+# yaml-language-server: $schema=../.schemas/rules.schema.json
+title: Samples, scans and deviations
+canvas:
+  purpose: what is scanned, and what a person decides when something is wrong with a sample
+  packages: [Samples, Deviations]
+rules:
+  - id: R7
+    title: Every status comes from a scan on the sample
+    kind: behavioural
+    status: agreed
+    decided: { session: 1, date: 2026-03-02 }
+    text: >-
+      A scan names the sample, what happened and where. The sample does not know which tasks it is
+      on: every handling of it gets the scan and decides what it means. The scan's own id makes a
+      resent scan harmless.
+  - id: R8
+    title: A deviation holds the step until a person decides
+    kind: behavioural
+    status: agreed
+    decided: { session: 1, date: 2026-03-02 }
+    text: >-
+      Haemolysed or missing, reported at a site, holds the sample's steps there. Resolved — it did
+      not happen — the step goes on; confirmed, the step fails and the sample stops.
+  - id: R9
+    title: A tube rejected on receipt fails the step at once
+    kind: behavioural
+    status: agreed
+    decided: { session: 1, date: 2026-03-02 }
+    text: >-
+      An unlabelled tube is rejected on receipt: no deviation, nobody to decide — the step fails and
+      the sample stops.

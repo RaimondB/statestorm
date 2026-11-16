@@ -1,0 +1,153 @@
+# The deliberately nasty example (design §8): hierarchy's real cost is the diagram, and a
+# tidy two-state model hides every layout problem. So this one is four levels deep, has
+# transitions that cross levels in both directions, a deadline on a mid-level composite
+# that lands in a deep sibling, a command handled at two levels, and `done` signals that
+# chain upward through three composites. Like sales.yaml it is also a test fixture.
+context: Claims
+
+aggregates:
+  Claim:
+    creators: [Submit]
+    data:
+      amount:        { type: number, default: 0 }
+      documents:     { type: number, default: 0 }
+      route:         { type: string, default: "" }
+      withdrawnFrom: { type: string, default: "" }
+    initial: new
+    states:
+      new:
+        on:
+          Submit:
+            guard: command.amount > 0
+            assign: { amount: command.amount }
+            target: handling                          # lands two levels down
+            emit: [ ClaimSubmitted: { claimId: "${id}", amount: "${command.amount}" } ]
+
+      handling:
+        initial: intake
+        on:
+          Withdraw:                                   # the outer handler...
+            assign: { withdrawnFrom: "'handling'" }
+            target: withdrawn
+            emit: [ ClaimWithdrawn: { claimId: "${id}" } ]
+        on_done:                                      # done.handling, after `paid`
+          target: closed
+          emit: [ ClaimClosed: { claimId: "${id}" } ]
+        states:
+
+          intake:
+            initial: awaiting_documents
+            on:
+              Withdraw:                               # ...and an inner one that wins while it can (R21a)
+                guard: documents == 0
+                assign: { withdrawnFrom: "'intake'" }
+                target: withdrawn
+                emit: [ ClaimWithdrawn: { claimId: "${id}" } ]
+              # Documents arrive in several messages, each adding to the count — so a
+              # redelivered batch would count twice. The batch's own identity says whether it
+              # has already been counted (ADR 0006 §3). Declared on `intake`, so it applies
+              # before and after the reminder alike.
+              DocumentsReceived:
+                idempotency: command.batchId
+                guard: documents + command.count >= 3
+                assign: { documents: documents + command.count }
+                target: handling.intake.complete
+                emit: [ DocumentsArrived: { claimId: "${id}", total: "${documents}" } ]
+              DocumentsReceived#some:
+                idempotency: command.batchId
+                assign: { documents: documents + command.count }
+                emit: [ DocumentsArrived: { claimId: "${id}", total: "${documents}" } ]
+            on_done: { target: handling.assessment }
+            states:
+              awaiting_documents:
+                after:
+                  14d:
+                    target: handling.intake.reminded
+                    emit: [ DocumentsRequested: { claimId: "${id}" } ]
+              reminded:
+                after:
+                  14d:                                # three levels up and out
+                    target: rejected
+                    emit: [ ClaimRejected: { claimId: "${id}", reason: no documents } ]
+              complete: { final: true }               # -> done.handling.intake
+
+          assessment:
+            initial: triage
+            after:
+              30d:                                    # outlives triage and investigation, lands in a deep sibling
+                target: handling.assessment.decision
+                emit: [ AssessmentOverdue: { claimId: "${id}" } ]
+            states:
+              triage:
+                on:
+                  Assess:
+                    guard: amount <= 1000
+                    assign: { route: "'fast track'" }
+                    target: handling.assessment.decision.approved   # straight into a final, two levels down
+                  Assess#large:
+                    assign: { route: "'investigated'" }
+                    target: handling.assessment.investigation
+              investigation:
+                initial: scheduling
+                on_done: { target: handling.assessment.decision }
+                states:
+                  scheduling:
+                    on:
+                      VisitScheduled: { target: handling.assessment.investigation.visiting }
+                  visiting:
+                    after:
+                      7d:
+                        target: handling.assessment.investigation.scheduling
+                        emit: [ VisitMissed: { claimId: "${id}" } ]
+                    on:
+                      VisitReported:
+                        target: handling.assessment.investigation.reported
+                        emit: [ InvestigationReported: { claimId: "${id}" } ]
+                  reported: { final: true }           # -> done.handling.assessment.investigation
+              decision:
+                initial: pending
+                on_done: { target: handling.payout }  # done.handling.assessment.decision
+                states:
+                  pending:
+                    on:
+                      Approve: { target: handling.assessment.decision.approved }
+                      Reject:                         # from four levels down straight out to the root
+                        target: rejected
+                        emit: [ ClaimRejected: { claimId: "${id}", reason: assessed } ]
+                  approved:
+                    final: true
+                    emit_on_entry: [ ClaimApproved: { claimId: "${id}", amount: "${amount}" } ]
+
+          payout:
+            emit_on_entry: [ PayoutRequested: { claimId: "${id}", amount: "${amount}" } ]
+            on:
+              PaymentConfirmed: { target: handling.paid }
+          paid: { final: true }                       # -> done.handling
+
+      withdrawn: { final: true }
+      rejected:  { final: true }
+      closed:    { final: true, on: { PaymentConfirmed: {} } }   # a repeat: delivery is at least once (ADR 0006)
+
+  Payment:
+    creators: [Request]
+    data:
+      amount: { type: number, default: 0 }
+    initial: requested
+    states:
+      requested:
+        on:
+          Request:
+            assign: { amount: command.amount }
+            target: sent
+            emit: [ PaymentSent: { claimId: "${id}" } ]
+      sent: { final: true, on: { Request: {} } }   # a repeat: sent once
+
+policies:
+  pay_approved_claims:
+    on: PayoutRequested
+    command: "Payment#${event.claimId}.Request"
+    with: { amount: "${event.amount}" }
+
+  confirm_payment:
+    on: PaymentSent
+    command: "Claim#${event.claimId}.PaymentConfirmed"

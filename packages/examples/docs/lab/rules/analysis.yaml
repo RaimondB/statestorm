@@ -1,0 +1,32 @@
+# yaml-language-server: $schema=../.schemas/rules.schema.json
+title: Analysis
+canvas:
+  purpose: a department of the lab — received, run within the sample's stability, result released
+  packages: [Analysis]
+rules:
+  - id: R10
+    title: Stability counts from when the run is expected
+    kind: behavioural
+    status: agreed
+    supersedes: [R11]
+    decided: { session: 2, date: 2026-03-09, questions: [Q-2] }
+    release: "1"
+    text: >-
+      A sample must reach the analyser within its stability, counted from when its run is expected.
+      Queued on the analyser it is kept cool and no longer ages. After a deviation is resolved, it
+      ages again from then. Too old, the run fails and the sample stops.
+  - id: R11
+    title: Stability counts from collection
+    kind: behavioural
+    status: superseded
+    decided: { session: 1, date: 2026-03-02, questions: [Q-2] }
+    text: A sample's stability is counted from when it was collected.
+  - id: R12
+    title: How a released result reaches the doctor
+    kind: behavioural
+    status: deferred
+    decided: { session: 1, date: 2026-03-02 }
+    release: "2"
+    text: >-
+      The report task ends at Released. Sending the result to the doctor's system is left out until
+      the lab's interface is chosen.

@@ -1,0 +1,14 @@
+# yaml-language-server: $schema=../.schemas/vocabulary.schema.json
+title: The scans the lab's scanners send
+values:
+  - { value: Collected, definition: drawn and labelled at the clinic }
+  - { value: Packed, definition: packed for transport }
+  - { value: PickedUp, definition: "taken by the courier, or sent by the tube station" }
+  - { value: Delivered, definition: handed over at the destination }
+  - { value: Received, definition: accepted by the lab }
+  - { value: Queued, definition: placed on the analyser }
+  - { value: Analysed, definition: run on the analyser }
+  - { value: Released, definition: the result released }
+  - { value: Rejected, definition: refused on receipt — an unlabelled tube }
+  - { value: Haemolysed, definition: the sample is haemolysed }
+  - { value: Missing, definition: expected and not there }

@@ -1,0 +1,21 @@
+# Inside the hospital: a ward sends its tubes by the pneumatic tube system, a clinic next door
+# walks them over. Invented for the example, like sample-to-result.
+drawing: Samples from inside the hospital
+source: invented for the example, 2026-10-21
+lanes:
+  Ward / clinic: [Drawn, Sent by tube, Walked over]
+  Lab: [Arrived by tube, Received, Analysed, Result released]
+names:
+  Drawn: Collected
+  Sent by tube: PickedUp
+  Walked over: Delivered                  # the clinic next door: no transfer
+  Arrived by tube: Delivered
+  Result released: Released
+arrows:
+  - Drawn -> Sent by tube
+  - Sent by tube -> Arrived by tube
+  - Arrived by tube -> Received
+  - Drawn -> Walked over
+  - Walked over -> Received
+  - Received -> Analysed
+  - Analysed -> Result released

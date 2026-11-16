@@ -1,0 +1,11 @@
+# `docker compose up -d --build` serves the workbench on the LAN at http://<host>:8097 — the
+# platform's own: the neutral examples, and Open folder…. A domain repo serves its own site,
+# on a port of its own.
+services:
+  ui:
+    build: { context: ., dockerfile: infra/Dockerfile }
+    image: statestorm-ui
+    container_name: statestorm-ui
+    ports: ["8097:80"]
+    restart: unless-stopped
+    mem_limit: 64m

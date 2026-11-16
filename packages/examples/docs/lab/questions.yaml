@@ -1,0 +1,19 @@
+# yaml-language-server: $schema=.schemas/questions.schema.json
+questions:
+  - id: Q-1
+    question: Is a redraw a new sample, or the same one again?
+    leaning: a new sample on a new request — the failed request stays as it ended
+    options:
+      - { option: a new sample on a new request, consequence: "nothing changes in the model; the doctor asks again" }
+      - { option: the same sample again, consequence: "a way back from Haemolysed to Drawn on the sample, and the route reopens" }
+    status: open
+    about: [R16]
+    asked: { session: 1, date: 2026-03-02 }
+  - id: Q-2
+    question: From when does a sample's stability count?
+    leaning: from when it is collected
+    status: answered
+    asked: { session: 1, date: 2026-03-02 }
+    answer: from when its run is expected; on the analyser's queue it is kept cool and no longer ages
+    answered: { session: 2, date: 2026-03-09 }
+    answeredBy: [R10]

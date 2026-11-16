@@ -1,0 +1,24 @@
+# Documents arrive a few at a time, each message adding to the count. The rule is declared
+# once on `intake`, so a batch that arrives after the reminder counts the same as one before.
+scenario: documents arriving in several batches add up, before and after the reminder
+given:
+  at: 2026-01-01T09:00:00Z
+  send:
+    - Claim#B1.Submit: { amount: 400 }
+    - Claim#B2.Submit: { amount: 400 }
+when:
+  - send: { Claim#B1.DocumentsReceived: { batchId: b1-1, count: 1 } }
+  - send: { Claim#B1.DocumentsReceived: { batchId: b1-2, count: 1 } }
+  - expect_state: { Claim#B1: handling.intake.awaiting_documents }   # two is not three
+  - send: { Claim#B1.DocumentsReceived: { batchId: b1-3, count: 1 } }
+  - expect_state: { Claim#B1: handling.assessment.triage }
+  - send: { Claim#B2.DocumentsReceived: { batchId: b2-1, count: 2 } }
+  - advance: 14d
+  - expect_state: { Claim#B2: handling.intake.reminded }
+  - send: { Claim#B2.DocumentsReceived: { batchId: b2-2, count: 1 } }
+then:
+  - state: { Claim#B1: handling.assessment.triage, Claim#B2: handling.assessment.triage }
+  - data: { Claim#B1: { documents: 3 }, Claim#B2: { documents: 3 } }
+  - emitted: [DocumentsArrived, DocumentsRequested]
+  - not_emitted: [ClaimRejected]
+  - no_findings: [error, warning]

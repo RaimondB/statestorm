@@ -1,0 +1,9 @@
+{
+  "name": "@statestorm/scenarios",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "LGPL-3.0-or-later",
+  "exports": { ".": "./src/index.ts", "./files": "./src/files.ts", "./main": "./src/main.ts" },
+  "dependencies": { "@statestorm/kernel": "workspace:*", "yaml": "^2.6.1" }
+}

@@ -1,0 +1,16 @@
+# Two rules for one command: the guarded one is tried first and its refusal is recorded,
+# then the fallback runs. The order stays put and accumulates.
+scenario: a part payment is recorded without advancing the order
+given:
+  at: 2026-01-01T09:00:00Z
+  send:
+    - Order#G1.Place: { total: 100, items: [widget] }
+when:
+  - send: { Order#G1.Pay: { paymentId: p40, amount: 40 } }
+  - expect_state: { Order#G1: fulfilling.awaiting_payment }
+  - send: { Order#G1.Pay: { paymentId: p60, amount: 60 } }
+then:
+  - state: { Order#G1: fulfilling.shipping }
+  - data: { Order#G1: { paid: 100 } }
+  - emitted: [PaymentReceived, OrderPaid]
+  - no_findings: [error, warning]

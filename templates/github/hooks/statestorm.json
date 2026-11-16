@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "hooks": {
+    "postToolUse": [
+      { "type": "command", "bash": "node .github/hooks/check-docs.mjs", "powershell": "node .github/hooks/check-docs.mjs", "timeoutSec": 60 }
+    ]
+  }
+}

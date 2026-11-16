@@ -1,0 +1,43 @@
+# yaml-language-server: $schema=.schemas/glossary.schema.json
+terms:
+  - term: Request
+    definition: A doctor's request for tests on one patient's samples.
+    model: [Request]
+  - term: Route
+    definition: The way of a request's samples to one lab, from the clinic that draws them to the result.
+    model: [Route]
+  - term: Step
+    definition: One part of a route — a site the samples pass, a transfer between two sites, or an analysis.
+    model: [Step, SiteVisit, Analysis]
+  - term: Task
+    definition: A part of a step at one stage — start, middle or final; the latest stage reached decides whether the step failed.
+    model: [Task]
+  - term: Handling
+    definition: One sample on one task, where what a scan means to that task is decided.
+    model: [Handling]
+  - term: Sample
+    aka: [tube]
+    definition: What is drawn from the patient and scanned on its way; one tube.
+    avoid:
+      - { word: specimen, why: the lab's forms say sample; one word for one thing }
+    model: [Sample]
+  - term: Transfer
+    definition: Moving samples between two sites — by courier, or through the hospital's pneumatic tube.
+    model: [Transfer, CourierRun, TubeRun]
+  - term: Stability
+    definition: How long a sample may wait for its run before it is too old to analyse.
+    model: [AnalysisHandling.open.expected.ageing, StabilityExpired]
+  - term: Queued
+    definition: On the analyser, kept cool; a queued sample no longer ages.
+    model: [Queued]
+    scan: Queued
+  - term: Haemolysed
+    definition: The red cells of the sample have burst; the result would be wrong.
+    model: [Haemolysed]
+    scan: Haemolysed
+  - term: Deviation
+    definition: Something reported about a sample — haemolysed, missing — that a person resolves or confirms.
+    model: [Deviation, SampleDeviation]
+  - term: Patient view
+    definition: What the patient is told about their request.
+    model: [PatientView]

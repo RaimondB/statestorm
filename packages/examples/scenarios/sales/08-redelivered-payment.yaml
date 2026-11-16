@@ -1,0 +1,14 @@
+# At-least-once delivery: the same payment arrives twice. `paid` accumulates, so without the
+# declared identity the order would show 80 against a 100 total. ADR 0006 §3.
+scenario: the same payment delivered twice is applied once
+given:
+  at: 2026-01-01T09:00:00Z
+  send:
+    - Order#H1.Place: { total: 100, items: [widget] }
+when:
+  - send: { Order#H1.Pay: { paymentId: p1, amount: 40 } }
+  - send: { Order#H1.Pay: { paymentId: p1, amount: 40 } }   # redelivery, not a second payment
+then:
+  - data: { Order#H1: { paid: 40 } }
+  - state: { Order#H1: fulfilling.awaiting_payment }
+  - no_findings: [error, warning]

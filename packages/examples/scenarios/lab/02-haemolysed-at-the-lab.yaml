@@ -1,0 +1,42 @@
+# Haemolysed on receipt: the lab reports the deviation, the steps there wait for a person, and
+# the person confirms it. Confirmed, the steps at the lab fail, the sample stops, and the patient
+# is told a new sample is needed. No links: the route's steps are drawn in plan order.
+scenario: haemolysed at the lab — confirmed, the steps there fail and a new sample is needed
+drawing: sample-to-result
+tags: [deviation, haemolysed]
+why: [R2, R5, R6, R8, R16]
+given:
+  at: 2026-03-02T08:00:00Z
+  phase: Planning
+  send:
+    - Request#R2.Create: { patient: P2, samples: [S3] }
+    - Route#R2-LAB1.Plan: { request: R2, lab: LAB1, tubes: [ { sample: S3, tube: serum } ] }
+    - SiteVisit#R2-CLIN1.Plan: { route: R2-LAB1, site: CLIN1, samples: [S3] }
+    - CourierRun#R2-C1.Plan: { route: R2-LAB1, origin: CLIN1, destination: LAB1, by: courier 7, samples: [S3] }
+    - Analysis#R2-CHEM.Plan: { route: R2-LAB1, site: LAB1, department: chemistry, stability: 8h, samples: [S3] }
+when:
+  - phase: To the lab
+  - send: { Sample#S3.Scan: { scanId: c-S3, event: Collected, site: CLIN1 } }
+  - send: { Sample#S3.Scan: { scanId: p-S3, event: Packed, site: CLIN1 } }
+  - send: { Sample#S3.Scan: { scanId: u-S3, event: PickedUp, site: CLIN1 } }
+  - send: { Sample#S3.Scan: { scanId: d-S3, event: Delivered, site: LAB1 } }
+  - send: { Sample#S3.Scan: { scanId: r-S3, event: Received, site: LAB1 } }
+  - phase: Haemolysed
+  - send: { Sample#S3.Scan: { scanId: h-S3, event: Haemolysed, site: LAB1, reason: red serum } }
+  - expect_state:
+      SampleDeviation#h-S3: pending
+      AnalysisHandling#R2-CHEM-run-S3: open.on_hold       # held, not failed: nobody decided yet
+      Analysis#R2-CHEM: in_progress
+      PatientView#R2: journey.at_lab
+  - send: { SampleDeviation#h-S3.Confirm: {} }
+then:
+  - state:
+      AnalysisHandling#R2-CHEM-run-S3: failed
+      Analysis#R2-CHEM: failed
+      Route#R2-LAB1: failed
+      Request#R2: failed
+      PatientView#R2: redraw_needed
+      SiteVisit#R2-CLIN1: completed                     # what happened before still happened
+  - emitted_count: { SampleStopped: 2 }                  # the run and the report at the lab
+  - not_emitted: [Released, StabilityExpired]
+  - no_findings: [error, warning]

@@ -1,0 +1,25 @@
+scenario: a paid, fully shipped order completes itself
+given:
+  at: 2026-01-01T09:00:00Z
+  send:
+    - Order#A1.Place: { total: 100, items: [widget, gizmo] }
+when:
+  - expect_state: { Order#A1: fulfilling.awaiting_payment }
+  - send: { Order#A1.Pay: { paymentId: p100, amount: 100 } }
+  - expect_state: { Order#A1: fulfilling.shipping }
+  - send: { OrderLine#A1-widget.Ship: {} }
+  - expect_state: { Order#A1: fulfilling.shipping }     # one line done is not all of them
+  - send: { OrderLine#A1-gizmo.Ship: {} }
+then:
+  - state: { Order#A1: completed }
+  - in_state: { ship_when_ready#A1: ready }
+  - state: { Shipment#A1: requested }
+  - emitted:
+      - OrderPlaced
+      - StockReserved
+      - OrderPaid
+      - ShipmentRequested
+      - OrderPartiallyShipped      # the existential quantifier, on the first line
+      - OrderCompleted             # via done.fulfilling
+  - data: { Order#A1: { total: 100, paid: 100 } }
+  - no_findings: [error, warning]

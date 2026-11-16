@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "statestorm/glossary.schema.json",
+  "title": "A domain's glossary",
+  "description": "docs/glossary.yaml in a domain folder: the ubiquitous language — one entry per term, and what in the model it names (ADR 0016).",
+  "type": "object",
+  "required": ["terms"],
+  "additionalProperties": false,
+  "properties": {
+    "terms": { "type": "array", "items": { "$ref": "#/$defs/term" } }
+  },
+  "$defs": {
+    "term": {
+      "type": "object",
+      "required": ["term", "definition"],
+      "properties": {
+        "term": { "type": "string", "description": "The word the domain uses, as it writes it (Sample, Route)." },
+        "definition": { "type": "string", "description": "What it means, in a sentence or two — in the domain's words, not the model's." },
+        "aka": { "type": "array", "items": { "type": "string" }, "uniqueItems": true, "description": "Other words in use for the same thing, and abbreviations." },
+        "avoid": {
+          "type": "array",
+          "description": "Words not to use for it, each with why — a word that means something else here, or a framework's word for a business thing.",
+          "items": {
+            "type": "object",
+            "required": ["word", "why"],
+            "additionalProperties": false,
+            "properties": { "word": { "type": "string" }, "why": { "type": "string" } }
+          }
+        },
+        "model": {
+          "type": "array",
+          "items": { "type": "string" },
+          "uniqueItems": true,
+          "description": "What it names in the model: a type (Sample), an event (StabilityExpired) or a state (Type.path.to.state). Checked against the model."
+        }
+      },
+      "unevaluatedProperties": false
+    }
+  }
+}

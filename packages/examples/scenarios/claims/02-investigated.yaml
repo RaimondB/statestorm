@@ -1,0 +1,19 @@
+scenario: a large claim is investigated, approved and paid
+given:
+  at: 2026-01-01T09:00:00Z
+  send:
+    - Claim#L1.Submit: { amount: 5000 }
+    - Claim#L1.DocumentsReceived: { batchId: l1-docs, count: 4 }
+when:
+  - send: { Claim#L1.Assess: {} }
+  - expect_state: { Claim#L1: handling.assessment.investigation.scheduling }
+  - expect_in_state: { Claim#L1: handling.assessment }       # the whole configuration is active
+  - send: { Claim#L1.VisitScheduled: {} }
+  - send: { Claim#L1.VisitReported: {} }
+  - expect_state: { Claim#L1: handling.assessment.decision.pending }
+  - send: { Claim#L1.Approve: {} }
+then:
+  - state: { Claim#L1: closed }
+  - data: { Claim#L1: { route: investigated, documents: 4 } }
+  - emitted: [InvestigationReported, ClaimApproved, ClaimClosed]
+  - no_findings: [error, warning]

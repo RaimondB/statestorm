@@ -1,0 +1,22 @@
+# Q12 / ADR 0006 §4. Both lines ship while the order is still awaiting payment, so the
+# `all_final` condition becomes true long before the order is in a state that acts on it.
+# Because it is a predicate rather than an edge, entering `shipping` picks it up — under
+# edge-only triggering the order was stranded in `shipping` forever.
+scenario: lines that finish before the order is listening still complete it
+given:
+  at: 2026-01-01T09:00:00Z
+  send:
+    - Order#I1.Place: { total: 100, items: [widget, gizmo] }
+    - OrderLine#I1-widget.Ship: {}
+    - OrderLine#I1-gizmo.Ship: {}
+when:
+  - expect_state: { Order#I1: fulfilling.awaiting_payment }
+  - send: { Order#I1.Pay: { paymentId: p1, amount: 100 } }
+then:
+  - state: { Order#I1: completed }
+  - emitted: [OrderCompleted]
+  # `first_entering(shipped)` is a moment, and that moment passed while the order was not
+  # listening — so OrderPartiallyShipped never happened. That is reported as a warning, and
+  # it is the honest outcome rather than a stall.
+  - not_emitted: [OrderPartiallyShipped]
+  - no_findings: [error]

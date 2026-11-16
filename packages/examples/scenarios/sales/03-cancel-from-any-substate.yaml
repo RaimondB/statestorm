@@ -1,0 +1,16 @@
+# The composite's `Cancel` handler is written once and reached by bubbling outward from
+# whichever substate happens to be active — ADR 0005 §2.
+scenario: cancelling reaches the order from inside shipping
+given:
+  at: 2026-01-01T09:00:00Z
+  send:
+    - Order#C1.Place: { total: 50, items: [widget] }
+    - Order#C1.Pay: { paymentId: p50, amount: 50 }
+when:
+  - expect_state: { Order#C1: fulfilling.shipping }
+  - send: { Order#C1.Cancel: {} }
+then:
+  - state: { Order#C1: cancelled }
+  - not_in_state: { Order#C1: fulfilling }
+  - emitted: [OrderCancelled]
+  - no_findings: [error, warning]

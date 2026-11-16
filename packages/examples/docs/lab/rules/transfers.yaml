@@ -1,0 +1,22 @@
+# yaml-language-server: $schema=../.schemas/rules.schema.json
+title: Sites and transfers
+canvas:
+  purpose: the sites the samples pass, and moving them between two sites
+  packages: [Sites, Transfers]
+rules:
+  - id: R13
+    title: A transfer is picked up at its origin and delivered at its destination
+    kind: behavioural
+    status: agreed
+    decided: { session: 1, date: 2026-03-02 }
+    text: >-
+      By courier or by the hospital's pneumatic tube alike: picked up at the origin, delivered at
+      the destination. The tube has no courier; the station sends the tube on its own.
+  - id: R14
+    title: Next door, samples are walked over
+    kind: behavioural
+    status: agreed
+    decided: { session: 1, date: 2026-03-02 }
+    text: >-
+      Where the clinic is next to the lab there is no transfer: the samples are delivered there by
+      hand, and that ends the clinic's outbound.

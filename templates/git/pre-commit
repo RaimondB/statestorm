@@ -1,0 +1,18 @@
+#!/bin/sh
+# A git pre-commit hook for a statestorm domain repo (ADR 0016, 0017): no commit while the docs do not
+# trace against the model or the rulebook is stale — for every agent and person, whatever their
+# editor. Copied from statestorm's templates/git/ into the repo's .githooks/, and switched on once
+# per clone: git config core.hooksPath .githooks
+# STATESTORM names another statestorm command to run; `git commit --no-verify` skips the hook.
+cli="${STATESTORM:-node_modules/statestorm/dist/statestorm.js}"
+if [ ! -f "$cli" ]; then
+  echo "pre-commit: no statestorm at $cli — run pnpm install" >&2
+  exit 1
+fi
+node "$cli" check . --docs || {
+  echo "pre-commit: the docs do not check (statestorm docs . regenerates the rulebook)" >&2
+  exit 1
+}
+# The skills behind the platform is its news, not this commit's fault: a warning only (ADR 0017).
+node "$cli" skills . --check >/dev/null 2>&1 || \
+  echo "pre-commit: warning — the skills are behind statestorm or edited here; statestorm skills . says which" >&2

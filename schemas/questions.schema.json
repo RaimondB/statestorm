@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "statestorm/questions.schema.json",
+  "title": "A domain's questions",
+  "description": "docs/questions.yaml in a domain folder: what was asked of the domain owner, each with a leaning; answered ones keep their id and point at the rules that record the answer (ADR 0016).",
+  "type": "object",
+  "required": ["questions"],
+  "additionalProperties": false,
+  "properties": {
+    "questions": { "type": "array", "items": { "$ref": "#/$defs/question" } }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^\\S+$",
+      "description": "Any id without spaces, unique across the domain's rules, questions and drawing issues (Q-3)."
+    },
+    "session": {
+      "type": "object",
+      "required": ["date"],
+      "additionalProperties": false,
+      "properties": {
+        "session": { "type": "integer", "minimum": 1, "description": "The number of the log, docs/decisions/NN-<date>-<what>.md." },
+        "date": { "type": "string", "format": "date" }
+      }
+    },
+    "question": {
+      "type": "object",
+      "required": ["id", "question", "leaning", "status", "asked"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "question": { "type": "string", "description": "The question as asked." },
+        "leaning": { "type": "string", "description": "The default that is built unless the owner says otherwise." },
+        "options": {
+          "type": "array",
+          "description": "When it is a trade-off: the options, each with what it does to the model.",
+          "items": {
+            "type": "object",
+            "required": ["option", "consequence"],
+            "additionalProperties": false,
+            "properties": { "option": { "type": "string" }, "consequence": { "type": "string" } }
+          }
+        },
+        "status": {
+          "enum": ["open", "answered", "withdrawn"],
+          "description": "open: waiting on the owner. answered: `answer` and `answeredBy` say what was decided. withdrawn: no longer asked; `answer` says why."
+        },
+        "about": { "type": "array", "items": { "$ref": "#/$defs/id" }, "uniqueItems": true, "description": "The rules it would change, so the rulebook shows the question beside them." },
+        "asked": { "$ref": "#/$defs/session", "description": "The session it was asked in." },
+        "answer": { "type": "string", "description": "What the owner said, in their words where they gave them." },
+        "answered": { "$ref": "#/$defs/session", "description": "The session it was answered in." },
+        "answeredBy": { "type": "array", "items": { "$ref": "#/$defs/id" }, "minItems": 1, "uniqueItems": true, "description": "The rules that record the answer." }
+      },
+      "allOf": [
+        { "if": { "properties": { "status": { "const": "answered" } } }, "then": { "required": ["answer", "answeredBy"] } },
+        { "if": { "properties": { "status": { "const": "withdrawn" } } }, "then": { "required": ["answer"] } }
+      ],
+      "unevaluatedProperties": false
+    }
+  }
+}

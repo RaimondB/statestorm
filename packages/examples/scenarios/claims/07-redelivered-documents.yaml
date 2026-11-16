@@ -1,0 +1,15 @@
+# At-least-once delivery: the same batch arrives twice. `documents` accumulates, so without
+# the declared identity the claim would count four documents and move on with two. Every
+# scenario also runs under the `duplicate` schedule, which redelivers every message.
+scenario: the same batch of documents delivered twice is counted once
+given:
+  at: 2026-01-01T09:00:00Z
+  send:
+    - Claim#R1.Submit: { amount: 400 }
+when:
+  - send: { Claim#R1.DocumentsReceived: { batchId: r1-1, count: 2 } }
+  - send: { Claim#R1.DocumentsReceived: { batchId: r1-1, count: 2 } }   # redelivery, not new documents
+then:
+  - data: { Claim#R1: { documents: 2 } }
+  - state: { Claim#R1: handling.intake.awaiting_documents }
+  - no_findings: [error, warning]

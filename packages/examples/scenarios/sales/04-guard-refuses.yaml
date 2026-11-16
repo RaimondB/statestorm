@@ -1,0 +1,11 @@
+# R21: the order refuses to be placed and says what it saw, rather than silently not moving. Refused,
+# its creating command creates nothing (ADR 0021): there is no order D1 afterwards.
+scenario: an order with nothing in it refuses to be placed
+given:
+  at: 2026-01-01T09:00:00Z
+  send:
+    - Order#D1.Place: { total: 0, items: [] }
+then:
+  - rejected: { Order#D1: Place }
+  - not_emitted: [OrderPlaced]
+  - no_findings: [error, warning]

@@ -1,0 +1,821 @@
+# Lab samples: a doctor's request for tests on a patient's samples. Each sample (a tube) is
+# drawn at a clinic, moved to a lab by courier or by the hospital's tube system, received, and
+# analysed by a department of the lab, which releases the result. Every status comes from a scan
+# on the sample, and rolls up through the steps of the request's route.
+#
+# Like sales.yaml and claims.yaml it is a test fixture — for the UI and the model check — and so
+# it uses on purpose what a real domain needs and a toy does not: abstract types refined by
+# concrete ones (ADR 0008, 0009), entities and value objects (ADR 0012), references and routing by
+# reference (ADR 0007), steps classified by stage (ADR 0011), packages (ADR 0013), a deadline read
+# from data (ADR 0014), a list of value objects (ADR 0015), and an `overview:` section with a flow
+# board. Its drawing, the business's picture of the process, is in drawings/lab/.
+context: Lab
+
+# Value objects (ADR 0012 §8): no identity, no lifecycle.
+values:
+  # A scan as the scanner sends it: what happened, where, and — for a deviation — why.
+  Scan: { scanId: string, event: string, site: string, reason: string? }
+  TubeRow: { sample: string, tube: string }        # one row of a route's plan: which sample, in which tube
+  # How the samples are to be handled — keep cold, protect from light, … — one per kind (ADR 0015).
+  Instruction: { kind: string, detail: string }
+
+# Packages (ADR 0013): a package lists its aggregates (and value objects); the entities an
+# aggregate creates come with it.
+packages:
+  Steps:
+    note: the generic step — its lifecycle, its tasks by stage, a handling per sample, and the roll-up every step shares
+    types: [Step, Task, Handling]
+  Requests:
+    note: the doctor's request and the route of its samples — the route's own tasks, its instructions, and which step follows which
+    why: [R4]
+    types: [Request, Route, TubeRow, Instruction]
+  Sites:
+    note: a site the samples pass — the clinic that draws them, or a lab they are sent on from
+    types: [SiteVisit]
+  Transfers:
+    note: moving samples between sites — by courier, or through the hospital's tube system; both pick up and deliver the same way
+    types: [Transfer, CourierRun, TubeRun]
+  Analysis:
+    note: a department of the lab — received, run within the sample's stability, result released
+    types: [Analysis]
+  Samples:
+    note: what is scanned, and the scan itself
+    types: [Sample, Scan]
+  Patient:
+    note: what the patient is told
+    types: [PatientView]
+  Deviations:
+    note: a deviation status, pending until a person resolves or confirms it — only confirmed does it count
+    types: [Deviation, SampleDeviation]
+
+# The overview: the request as the lab draws it. Handlings fold into their tasks and samples go in
+# the side lane — both are inferred from the references; this says only what cannot be inferred.
+# Where each package runs, and who is outside (ADR 0018): two systems of the lab's own — the lab
+# split into three sub-systems, each a bounded context, and the patient portal — and the systems
+# that talk to them. A deviation confirmed or resolved by lab staff is a person's, not a system's.
+systems:
+  Lab:
+    note: the lab's own system — the doctor's request, the samples on their way, the bench
+    domain: Diagnostics
+    subsystems:
+      Ordering:  { context: Requests, packages: [Requests, Steps], note: the request and its route }
+      Logistics: { context: Sample logistics, packages: [Sites, Transfers, Samples, Deviations] }
+      Bench:     { context: Testing, packages: [Analysis] }
+  # A vendor's portal: what it shows the patient is specified here, and runs there (ADR 0020 §2).
+  Patient portal:
+    note: what the patient sees — a vendor's, under the lab's responsibility
+    domain: Diagnostics
+    external: true
+    packages: [Patient]
+  Hospital information system:
+    external: true
+    domain: Hospital
+    note: the hospital's own system, where the doctor orders
+    sends: [Request.Create, Route.Plan, Route.Link, Route.Instruct, SiteVisit.Plan, CourierRun.Plan, TubeRun.Plan, Analysis.Plan]
+  # One vendor, three parts, each sending its own scans (ADR 0020 §3, §4) — the role it plays
+  # (ADR 0027): another vendor's app sending the same scans could take its place.
+  Scanners:
+    external: true
+    note: the scanner vendor — at the clinic, in the courier's hand, at the bench
+    subsystems:
+      Clinic app:    { plays: [Collecting] }
+      Courier app:   { plays: [Carrying] }
+      Bench scanner: { plays: [Testing] }
+  Messaging:
+    external: true
+    note: texts and e-mails to the patient
+    receives: [PatientInformed]
+
+# Who works each step, by what it does and the scans it sends — whoever does it (ADR 0027).
+roles:
+  Collecting: { works: [SiteVisit], sends: [{ Sample.Scan: { event: [Collected, Packed] } }], note: taking the sample at the clinic }
+  Carrying:   { works: [Transfer], sends: [{ Sample.Scan: { event: [PickedUp, Delivered, Missing] } }], note: the courier's run or the tube }
+  Testing:    { works: [Analysis], sends: [{ Sample.Scan: { event: [Received, Queued, Analysed, Released, Haemolysed, Rejected] } }], note: the bench }
+
+domains:
+  Diagnostics: { note: "the lab's scope — its system, and the portal it answers for" }
+
+contexts:
+  Requests: { team: orders, note: the doctor's request as the lab understands it }
+  Sample logistics: { team: logistics }
+  Testing: { team: bench }
+
+relations:
+  - { upstream: Hospital information system, downstream: Requests, pattern: anticorruption-layer }
+  - { upstream: Lab, downstream: Patient portal, pattern: customer-supplier }
+
+overview:
+  roots: [Request]
+  sequence: [Route.steps]                  # left to right, by which step follows which
+  top: [PatientView]                       # what the patient is told, first and always
+  band: [Route.tasks]                      # the route's own tasks, end to end
+  hide: [Handling]
+  omit: [Deviation, Link]                  # a deviation is the substatus of the status that reported it; a link is plan
+  side: [Sample]
+  attributes: [reason]                     # why a deviation was reported, under the sample it is about
+  follows: { type: Link, before: before, after: after }
+  label:
+    Request: "for ${patient}"
+    Route: "to ${lab}"
+    SiteVisit: "at ${site}"
+    Transfer: "${origin} → ${destination} · ${by}"
+    Analysis: "${department} at ${site}"
+    Task: "${kind}"
+    PatientView: "what the patient sees · ${id}"
+  events:
+    hide: ["*Planned", RequestCreated, RequestCompleted, RequestFailed, SampleStopped, PatientInformed,
+           DeviationPending, DeviationResolved, DeviationConfirmed]
+    status: Deviation
+  # The flow board: every event that happens to a sample, in the lane where it happens. A status
+  # named in a lane is drawn there; any other goes to the lane of the step whose task it moved — so
+  # Delivered is the transport's, except where a clinic next to the lab walks its samples over.
+  flow:
+    of: [Sample]
+    lanes:
+      Clinic / sender: [Collected, Packed, SiteVisit]    # a lab that sends a sample on packs it too
+      Transport: [PickedUp, Transfer]
+      Lab: [Received, Rejected, Haemolysed, Missing, Queued, Analysed, StabilityExpired, Released, Analysis]
+  color:
+    Request: navy
+    Route: green                           # more specific than Step, so it wins
+    PatientView: purple
+    Analysis: teal
+    Step: blue                             # sites and transfers
+
+aggregates:
+
+  # ================================================================== the request
+
+  # The doctor's request for one patient: one route per lab its samples go to. It ends when its
+  # routes have.
+  Request:
+    why: [R4]
+    creators: [Create]
+    data:
+      patient: { type: string }
+    children:
+      routes: { type: Route, via: command.request }
+    initial: open
+    states:
+      open:
+        on:
+          Create:
+            takes: { patient: string, samples: [string] }
+            assign: { patient: command.patient }
+            emit: [ RequestCreated: { request: "${id}", samples: "${command.samples}" } ]
+        on_children:
+          routes.all_final#completed:
+            why: [R5]
+            guard: routes.in.completed == routes.count
+            target: completed
+          routes.all_final#partial:
+            why: [R5]
+            guard: routes.in.completed > 0 or routes.in.partially_completed > 0
+            target: partially_completed
+          routes.all_final: { target: failed, why: [R5] }
+      completed:
+        final: true
+        emit_on_entry: [ RequestCompleted: { request: "${id}" } ]
+      partially_completed:
+        final: true
+        emit_on_entry: [ RequestCompleted: { request: "${id}" } ]
+      failed:
+        final: true
+        emit_on_entry: [ RequestFailed: { request: "${id}" } ]
+
+  # ================================================================== the generic step
+
+  # Every step of a route — and the route itself — rolls up the same way, from its tasks: a task
+  # per stage (start, middle, final), and the latest stage reached decides failure.
+  Step:
+    abstract: true
+    why: [R1]
+    creators: [Plan]
+    children:
+      tasks:
+        type: Task
+        via: command.step
+        classify: { by: stage, values: [start, middle, final] }
+    initial: created
+    states:
+      created:
+        on_children:
+          tasks.any(in_progress): { target: in_progress }
+          tasks.all_final#not_needed:            # the sample stopped before this step
+            guard: tasks.in.not_needed == tasks.count
+            target: not_needed
+      in_progress:
+        on_children:
+          tasks.all_final#completed:
+            guard: tasks.in.completed > 0 and tasks.in.failed == 0 and tasks.in.partially_completed == 0
+            target: completed
+          tasks.all_final#failed_at_final:
+            why: [R2]
+            guard: >-
+              tasks.stage.final.count - tasks.stage.final.in.not_needed > 0 and
+              tasks.stage.final.in.completed == 0 and tasks.stage.final.in.partially_completed == 0
+            target: failed
+          tasks.all_final#failed_at_middle:
+            why: [R2]
+            guard: >-
+              tasks.stage.final.count - tasks.stage.final.in.not_needed == 0 and
+              tasks.stage.middle.count - tasks.stage.middle.in.not_needed > 0 and
+              tasks.stage.middle.in.completed == 0 and tasks.stage.middle.in.partially_completed == 0
+            target: failed
+          tasks.all_final#failed_at_start:
+            why: [R2]
+            guard: >-
+              tasks.stage.final.count - tasks.stage.final.in.not_needed == 0 and
+              tasks.stage.middle.count - tasks.stage.middle.in.not_needed == 0 and
+              tasks.stage.start.in.completed == 0 and tasks.stage.start.in.partially_completed == 0
+            target: failed
+          tasks.all_final#not_needed:
+            guard: tasks.in.not_needed == tasks.count
+            target: not_needed
+          tasks.all_final#partial: { target: partially_completed }
+      completed: { final: true }
+      partially_completed: { final: true }
+      failed: { final: true }
+      not_needed: { final: true }
+
+  Task:
+    abstract: true
+    why: [R1]
+    kind: entity                       # part of its step (ADR 0012); every subtype is one too
+    creators: [Plan]
+    data:
+      kind:  { type: string }
+      stage: { type: string }          # start, middle or final — what its step's roll-up reads
+    children:
+      handlings: { type: Handling, via: command.task }
+    initial: created
+    states:
+      created:
+        on:
+          Plan: { assign: { kind: command.kind, stage: command.stage } }
+        on_children:
+          handlings.any(open.started): { target: in_progress }
+          handlings.any(completed):    { target: in_progress }
+          handlings.any(failed):       { target: in_progress }
+          handlings.all_final#not_needed:        # every sample stopped before this task saw it
+            why: [R3]
+            guard: handlings.in.completed == 0 and handlings.in.failed == 0
+            target: not_needed
+      in_progress:
+        on_children:
+          handlings.all_final#completed:
+            guard: handlings.in.completed > 0 and handlings.in.failed == 0
+            target: completed
+          handlings.all_final#failed:
+            guard: handlings.in.failed > 0 and handlings.in.completed == 0
+            target: failed
+          handlings.all_final#partial:
+            guard: handlings.in.completed > 0 and handlings.in.failed > 0
+            target: partially_completed
+          handlings.all_final#not_needed: { target: not_needed }
+      completed: { final: true }
+      partially_completed: { final: true }
+      failed: { final: true }
+      not_needed: { final: true }
+
+  # One sample on one task. Scans reach every handling of the sample; each decides what — if
+  # anything — the scan means to it.
+  Handling:
+    abstract: true
+    kind: entity
+    creators: [Expect]
+    references:
+      sample: { type: Sample, via: command.sample }
+    data:
+      kind: { type: string }
+      site: { type: string }           # where this task happens
+    initial: open
+    states:
+      open:
+        initial: expected
+        on:
+          Expect: { assign: { kind: command.kind, site: command.site } }
+          # The sample failed somewhere earlier: a task still waiting for it no longer expects it.
+          SampleStopped: { target: excluded, why: [R3] }
+          # A deviation reported here holds the step until a person decides; confirmed, it fails it.
+          DeviationPending:
+            why: [R8]
+            guard: command.site == site
+            target: open.on_hold
+          Haemolysed:
+            guard: command.site == site
+            target: failed
+            emit: [ SampleStopped: { sample: "${sample}", because: Haemolysed } ]
+          Missing:
+            guard: command.site == site
+            target: failed
+            emit: [ SampleStopped: { sample: "${sample}", because: Missing } ]
+          # Rejected on receipt — an unlabelled tube: no deviation, nobody to decide, the step fails.
+          Rejected:
+            why: [R9]
+            guard: command.site == site and (kind == 'receive' or kind == 'inbound')
+            target: failed
+            emit: [ SampleStopped: { sample: "${sample}", because: Rejected } ]
+        states:
+          expected: {}
+          started: {}
+          on_hold:
+            on:
+              DeviationResolved: { target: open.expected, why: [R8] }     # it did not happen: open again
+      completed: { final: true }
+      failed: { final: true }
+      excluded: { final: true }        # stopped elsewhere; counts neither way
+
+  # ================================================================== the route
+
+  # The samples' way from the clinic to the lab that reports them: its own two tasks — collected,
+  # reported — a handling per sample, and the steps in between, linked by which follows which.
+  Route:
+    why: [R4]
+    extends: Step
+    data:
+      request:      { type: string }
+      lab:          { type: string }
+      priority:     { type: string, default: routine }
+      instructions: { type: [Instruction], key: kind }
+    children:
+      steps: { type: Step, via: command.route }
+      links: { type: Link, via: command.route }
+    states:
+      created:
+        on:
+          Plan#stat:
+            guard: command.priority == 'stat'
+            takes: &route_plan { request: string, lab: string, priority: string?, tubes: [TubeRow] }
+            assign: { request: command.request, lab: command.lab, priority: "'stat'" }
+            emit: &route_planned [ RoutePlanned: { route: "${id}", request: "${command.request}" } ]
+            send: &route_tasks
+              - to: "RouteTask#${id}-collect.Plan"
+                with: { step: "${type}#${id}", kind: collect, stage: start }
+              - for_each: command.tubes
+                to: "RouteHandling#${id}-collect-${item.sample}.Expect"
+                with: { task: "RouteTask#${id}-collect", sample: "${item.sample}", kind: collect, site: "" }
+              - to: "RouteTask#${id}-report.Plan"
+                with: { step: "${type}#${id}", kind: report, stage: final }
+              - for_each: command.tubes
+                to: "RouteHandling#${id}-report-${item.sample}.Expect"
+                with: { task: "RouteTask#${id}-report", sample: "${item.sample}", kind: report, site: "" }
+          Plan:
+            takes: *route_plan
+            assign: { request: command.request, lab: command.lab }
+            emit: *route_planned
+            send: *route_tasks
+          Link: &link
+            send: { to: "Link#${command.link}.Plan", with: { route: "${id}", before: "${command.before}", after: "${command.after}" } }
+          Instruct: &instruct
+            takes: Instruction
+            put: { instructions: { kind: command.kind, detail: command.detail } }
+      in_progress:
+        on:
+          Link: *link
+          Instruct: *instruct
+
+  RouteTask:
+    extends: Task
+
+  RouteHandling:
+    extends: Handling
+    states:
+      open:
+        on:
+          Collected: { guard: kind == 'collect', target: completed }
+          Released: { guard: kind == 'report', target: completed }
+          # A sample stopped anywhere on the route is a sample the route did not report — the same
+          # key as Handling's, so it replaces it (ADR 0008).
+          SampleStopped: { guard: kind == 'report', target: failed, why: [R6] }
+          SampleStopped#collect: { target: excluded }
+
+  # Which step follows which: the overview lays the route out by these.
+  Link:
+    kind: entity
+    creators: [Plan]
+    references:
+      before: { type: Step, via: command.before }    # abstract, so held as keys
+      after:  { type: Step, via: command.after }
+    initial: planned
+    states:
+      planned:
+        on:
+          Plan: {}
+
+  # ================================================================== sites
+
+  # A site the samples pass: the clinic that draws them (inbound: collected), or a lab they are
+  # received at and sent on from. Outbound ends when they leave — picked up, or, where the clinic
+  # is next to the lab, delivered there by hand.
+  SiteVisit:
+    extends: Step
+    data:
+      site: { type: string }
+    states:
+      created:
+        on:
+          Plan:
+            assign: { site: command.site }
+            send:
+              - to: "SiteTask#${id}-inbound.Plan"
+                with: { step: "${type}#${id}", kind: inbound, stage: start, site: "${command.site}", samples: "${command.samples}" }
+              - to: "SiteTask#${id}-outbound.Plan"
+                with: { step: "${type}#${id}", kind: outbound, stage: final, site: "${command.site}", samples: "${command.samples}" }
+
+  SiteTask:
+    extends: Task
+    states:
+      created:
+        on:
+          Plan:
+            assign: { kind: command.kind, stage: command.stage }
+            send:
+              for_each: command.samples
+              to: "SiteHandling#${id}-${item}.Expect"
+              with: { task: "${type}#${id}", sample: "${item}", kind: "${command.kind}", site: "${command.site}" }
+
+  SiteHandling:
+    extends: Handling
+    states:
+      open:
+        on:
+          Collected: { guard: kind == 'inbound' and command.site == site, target: completed }
+          Received: { guard: kind == 'inbound' and command.site == site, target: completed }
+          Packed: { guard: kind == 'outbound' and command.site == site, target: open.started }
+          PickedUp: { guard: kind == 'outbound' and command.site == site, target: completed }
+          Delivered: { guard: kind == 'outbound' and command.site != site, target: completed, why: [R14] }    # walked over next door
+
+  # ================================================================== transfers
+
+  # Between two sites. A courier run and a tube run plan the same two tasks, so those belong to
+  # the nearest type both are (ADR 0013): picked up at the origin, delivered at the destination.
+  Transfer:
+    abstract: true
+    why: [R13]
+    extends: Step
+    data:
+      origin:      { type: string }
+      destination: { type: string }
+      by:          { type: string }
+    states:
+      created:
+        on:
+          Plan:
+            assign: { origin: command.origin, destination: command.destination, by: command.by }
+            send:
+              - to: "TransferTask#${id}-pickup.Plan"
+                with: { step: "${type}#${id}", kind: pickup, stage: start, site: "${command.origin}", samples: "${command.samples}" }
+              - to: "TransferTask#${id}-deliver.Plan"
+                with: { step: "${type}#${id}", kind: deliver, stage: final, site: "${command.destination}", samples: "${command.samples}" }
+
+  CourierRun:
+    extends: Transfer
+
+  # The hospital's pneumatic tube: no courier, the station sends the tube on its own.
+  TubeRun:
+    why: [R13]
+    extends: Transfer
+    states:
+      created:
+        on:
+          Plan:
+            assign: { origin: command.origin, destination: command.destination, by: "'tube'" }
+            send:
+              - to: "TransferTask#${id}-pickup.Plan"
+                with: { step: "${type}#${id}", kind: pickup, stage: start, site: "${command.origin}", samples: "${command.samples}" }
+              - to: "TransferTask#${id}-deliver.Plan"
+                with: { step: "${type}#${id}", kind: deliver, stage: final, site: "${command.destination}", samples: "${command.samples}" }
+
+  TransferTask:
+    extends: Task
+    states:
+      created:
+        on:
+          Plan:
+            assign: { kind: command.kind, stage: command.stage }
+            send:
+              for_each: command.samples
+              to: "TransferHandling#${id}-${item}.Expect"
+              with: { task: "${type}#${id}", sample: "${item}", kind: "${command.kind}", site: "${command.site}" }
+
+  TransferHandling:
+    extends: Handling
+    states:
+      open:
+        on:
+          PickedUp: { guard: kind == 'pickup' and command.site == site, target: completed }
+          Delivered: { guard: kind == 'deliver' and command.site == site, target: completed }
+
+  # ================================================================== analysis
+
+  # A department of the lab — chemistry, haematology — for the samples in its tubes: received,
+  # run, result released. A sample must reach the analyser within its stability, counted from the
+  # moment its run is expected (ADR 0014: the duration is the handling's own data, e.g. 4h). Queued
+  # is on the analyser, kept cool: the clock stops there.
+  Analysis:
+    extends: Step
+    data:
+      site:       { type: string }
+      department: { type: string }
+    states:
+      created:
+        on:
+          Plan:
+            takes: { route: string, site: string, department: string, stability: string, samples: [string] }
+            assign: { site: command.site, department: command.department }
+            send:
+              - to: "AnalysisTask#${id}-receive.Plan"
+                with: { step: "${type}#${id}", kind: receive, stage: start, site: "${command.site}", stability: "", samples: "${command.samples}" }
+              - to: "AnalysisTask#${id}-run.Plan"
+                with: { step: "${type}#${id}", kind: run, stage: middle, site: "${command.site}", stability: "${command.stability}", samples: "${command.samples}" }
+              - to: "AnalysisTask#${id}-report.Plan"
+                with: { step: "${type}#${id}", kind: report, stage: final, site: "${command.site}", stability: "", samples: "${command.samples}" }
+
+  AnalysisTask:
+    extends: Task
+    states:
+      created:
+        on:
+          Plan:
+            assign: { kind: command.kind, stage: command.stage }
+            send:
+              for_each: command.samples
+              to: "AnalysisHandling#${id}-${item}.Expect"
+              with: { task: "${type}#${id}", sample: "${item}", kind: "${command.kind}", site: "${command.site}", stability: "${command.stability}" }
+
+  AnalysisHandling:
+    extends: Handling
+    data:
+      stability: { type: string, default: "" }
+    states:
+      open:
+        on:
+          # The same key as Handling's own, so it replaces it: an inherited rule is tried first (ADR 0008).
+          Expect:
+            guard: command.kind == 'run'
+            why: [R10]
+            assign: { kind: command.kind, site: command.site, stability: command.stability }
+            target: open.expected.ageing
+          Expect#other: { assign: { kind: command.kind, site: command.site } }
+          Received: { guard: kind == 'receive' and command.site == site, target: completed }
+          Queued: { guard: kind == 'run' and command.site == site, target: open.started }
+          Analysed: { guard: kind == 'run' and command.site == site, target: completed }
+          Released: { guard: kind == 'report' and command.site == site, target: completed }
+        states:
+          # Resolved, a run is expected again — and the sample ages again, from then.
+          on_hold:
+            on:
+              DeviationResolved: { guard: kind == 'run', target: open.expected.ageing, why: [R10] }
+              DeviationResolved#other: { target: open.expected }
+          # A step refines the states it inherits (ADR 0008): waiting for a run, the sample ages.
+          expected:
+            initial: waiting
+            states:
+              waiting: {}
+              ageing:
+                after:
+                  stability:
+                    why: [R10]
+                    target: failed
+                    emit:
+                      - StabilityExpired: { sample: "${sample}", site: "${site}" }
+                      - SampleStopped: { sample: "${sample}", because: StabilityExpired }
+
+  # ================================================================== the thing scanned
+
+  Sample:
+    why: [R7]
+    creators: [Register]
+    data:
+      request: { type: string }
+    initial: tracked
+    states:
+      tracked:
+        on:
+          Register: { assign: { request: command.request } }
+          # One command for every scan; the event raised is the scan's fact. The scan's own id
+          # makes a resent or redelivered scan harmless (ADR 0006 §3).
+          Scan#collected: &scan
+            idempotency: command.scanId
+            takes: Scan
+            guard: command.event == 'Collected'
+            emit: [ Collected: { sample: "${id}", request: "${request}", site: "${command.site}" } ]
+          Scan#packed:
+            idempotency: command.scanId
+            takes: Scan
+            guard: command.event == 'Packed'
+            emit: [ Packed: { sample: "${id}", request: "${request}", site: "${command.site}" } ]
+          Scan#picked_up:
+            idempotency: command.scanId
+            takes: Scan
+            guard: command.event == 'PickedUp'
+            emit: [ PickedUp: { sample: "${id}", request: "${request}", site: "${command.site}" } ]
+          Scan#delivered:
+            idempotency: command.scanId
+            takes: Scan
+            guard: command.event == 'Delivered'
+            emit: [ Delivered: { sample: "${id}", request: "${request}", site: "${command.site}" } ]
+          Scan#received:
+            idempotency: command.scanId
+            takes: Scan
+            guard: command.event == 'Received'
+            emit: [ Received: { sample: "${id}", request: "${request}", site: "${command.site}" } ]
+          Scan#queued:
+            idempotency: command.scanId
+            takes: Scan
+            guard: command.event == 'Queued'
+            emit: [ Queued: { sample: "${id}", request: "${request}", site: "${command.site}" } ]
+          Scan#analysed:
+            idempotency: command.scanId
+            takes: Scan
+            guard: command.event == 'Analysed'
+            emit: [ Analysed: { sample: "${id}", request: "${request}", site: "${command.site}" } ]
+          Scan#released:
+            idempotency: command.scanId
+            takes: Scan
+            guard: command.event == 'Released'
+            emit: [ Released: { sample: "${id}", request: "${request}", site: "${command.site}" } ]
+          Scan#rejected:
+            idempotency: command.scanId
+            takes: Scan
+            guard: command.event == 'Rejected'
+            emit: [ Rejected: { sample: "${id}", request: "${request}", site: "${command.site}", reason: "${command.reason}" } ]
+          # The deviations: reported, they open a deviation that a person decides.
+          Scan#haemolysed:
+            idempotency: command.scanId
+            takes: Scan
+            guard: command.event == 'Haemolysed'
+            emit: [ Haemolysed: { sample: "${id}", request: "${request}", site: "${command.site}", scanId: "${command.scanId}", reason: "${command.reason}" } ]
+          Scan#missing:
+            idempotency: command.scanId
+            takes: Scan
+            guard: command.event == 'Missing'
+            emit: [ Missing: { sample: "${id}", request: "${request}", site: "${command.site}", scanId: "${command.scanId}", reason: "${command.reason}" } ]
+
+  # ================================================================== deviations
+
+  # Reported, then resolved or confirmed by a person. Pending, it holds the sample's steps where it
+  # was reported; only confirmed does it have its effect — the step fails.
+  Deviation:
+    abstract: true
+    creators: [Open]
+    data:
+      event:  { type: string }         # the status that reported it: Haemolysed, Missing
+      site:   { type: string }
+      reason: { type: string }
+    initial: pending
+    states:
+      pending: {}
+      resolved: { final: true }        # it did not happen after all
+      confirmed: { final: true }       # it did: now it has its effect
+
+  SampleDeviation:
+    why: [R8]
+    extends: Deviation
+    references:
+      sample: { type: Sample, via: command.sample }
+    states:
+      pending:
+        on:
+          Open:
+            assign: { event: command.event, site: command.site, reason: command.reason }
+            emit: [ DeviationPending: { sample: "${sample}", event: "${command.event}", site: "${command.site}" } ]
+          Resolve:
+            target: resolved
+            emit: [ DeviationResolved: { sample: "${sample}", event: "${event}", site: "${site}" } ]
+          Confirm:
+            target: confirmed
+            emit: [ DeviationConfirmed: { sample: "${sample}", event: "${event}", site: "${site}" } ]
+
+  # ================================================================== the patient
+
+  # What the patient is told about their request — never about one tube. Forward only: a later
+  # milestone is never followed by an earlier one, so a late "in transit" cannot follow "at the lab".
+  PatientView:
+    why: [R15]
+    creators: [Open]
+    initial: journey
+    states:
+      journey:
+        initial: ordered
+        on:
+          Open: {}
+          Collected: {}                        # heard already, or overtaken: nothing new
+          InTransit: {}
+          AtLab: {}
+          Ready: { target: results_ready }
+          RedrawNeeded: { target: redraw_needed }
+        states:
+          ordered:
+            emit_on_entry: [ PatientInformed: { about: ordered } ]
+            on:
+              Collected: { target: journey.collected }
+              InTransit: { target: journey.in_transit }
+              AtLab: { target: journey.at_lab }
+          collected:
+            emit_on_entry: [ PatientInformed: { about: collected } ]
+            on:
+              InTransit: { target: journey.in_transit }
+              AtLab: { target: journey.at_lab }
+          in_transit:
+            emit_on_entry: [ PatientInformed: { about: in transit } ]
+            on:
+              AtLab: { target: journey.at_lab }
+          at_lab:
+            emit_on_entry: [ PatientInformed: { about: at the lab } ]
+      results_ready:
+        final: true
+        emit_on_entry: [ PatientInformed: { about: results ready } ]
+        on: { Ready: {} }                      # a repeat: told once
+      redraw_needed:                           # nothing to report: the doctor will ask again
+        why: [R16]
+        final: true
+        emit_on_entry: [ PatientInformed: { about: a new sample is needed } ]
+        on: { RedrawNeeded: {} }
+
+policies:
+
+  register_samples:
+    on: RequestCreated
+    for_each: event.samples
+    command: "Sample#${item}.Register"
+    with: { request: "${event.request}" }
+
+  open_patient_view:
+    on: RequestCreated
+    command: "PatientView#${event.request}.Open"
+
+  # ADR 0007 + 0009 + 0012: the sample does not know which tasks it is on; every step holding a
+  # handling of it gets the scan, and each handling decides what it means.
+  scans_to_handlings:
+    why: [R7]
+    on: [Collected, Packed, PickedUp, Delivered, Received, Rejected, Queued, Analysed, Released]
+    for_each_referrer: Handling.sample
+    command: "${item}.${eventName}"
+    with: { site: "${event.site}" }
+
+  # ------------------------------------------------------------------ deviations
+
+  open_deviation:
+    why: [R8]
+    on: [Haemolysed, Missing]
+    command: "SampleDeviation#${event.scanId}.Open"
+    with: { sample: "${event.sample}", event: "${eventName}", site: "${event.site}", reason: "${event.reason}" }
+
+  # The deviation is the raiser, so the fan-out names the sample it is about (ADR 0007 §8).
+  hold_for_deviation:
+    why: [R8]
+    on: DeviationPending
+    for_each_referrer: { via: Handling.sample, of: "${event.sample}" }
+    command: "${item}.DeviationPending"
+    with: { event: "${event.event}", site: "${event.site}" }
+
+  release_on_resolve:
+    why: [R8]
+    on: DeviationResolved
+    for_each_referrer: { via: Handling.sample, of: "${event.sample}" }
+    command: "${item}.DeviationResolved"
+
+  # Confirmed, it is the status it reported — reaching each step as that status.
+  deviation_to_handlings:
+    why: [R8]
+    on: DeviationConfirmed
+    for_each_referrer: { via: Handling.sample, of: "${event.sample}" }
+    command: "${item}.${event.event}"
+    with: { site: "${event.site}" }
+
+  sample_stopped:
+    why: [R3]
+    on: SampleStopped
+    for_each_referrer: { via: Handling.sample, of: "${event.sample}" }
+    command: "${item}.SampleStopped"
+    with: { because: "${event.because}" }
+
+  # ------------------------------------------------------------------ the patient
+
+  patient_collected:
+    on: Collected
+    command: "PatientView#${event.request}.Collected"
+
+  patient_in_transit:
+    on: PickedUp
+    command: "PatientView#${event.request}.InTransit"
+
+  patient_at_lab:
+    on: Received
+    command: "PatientView#${event.request}.AtLab"
+
+  patient_ready:
+    on: RequestCompleted
+    command: "PatientView#${event.request}.Ready"
+
+  patient_redraw:
+    why: [R16]
+    on: RequestFailed
+    command: "PatientView#${event.request}.RedrawNeeded"
+
+coverage:
+  lives_on:
+    Sample: the tube — tracked from its first scan to its last
+    Link: a link in the plan — which step follows which — not a process

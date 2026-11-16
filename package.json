@@ -1,0 +1,41 @@
+{
+  "name": "statestorm",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Interactive workbench for designing, running and explaining domain models built from aggregates that raise events",
+  "license": "LGPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/RaimondB/statestorm.git"
+  },
+  "type": "module",
+  "bin": { "statestorm": "dist/statestorm.js" },
+  "files": ["dist", "schemas", "templates", ".claude/skills", "AGENTS.md"],
+  "engines": {
+    "node": ">=22.18"
+  },
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "test": "node --test packages/*/test/*.test.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p packages/ui/tsconfig.json",
+    "example": "node packages/scenarios/src/cli.ts packages/examples/models/sales.yaml packages/examples/scenarios/sales",
+    "trace": "node packages/scenarios/src/cli.ts packages/examples/models/sales.yaml packages/examples/scenarios/sales --trace",
+    "chaos": "node packages/scenarios/src/cli.ts packages/examples/models/sales.yaml packages/examples/scenarios/sales --schedules",
+    "dev": "pnpm --filter @statestorm/ui dev",
+    "build": "pnpm --filter @statestorm/ui build",
+    "package": "pnpm -s build && pnpm -s --filter @statestorm/cli build",
+    "prepare": "pnpm -s package",
+    "check": "node packages/ui/src/check/cli.ts",
+    "check-all": "node scripts/check-all.mjs",
+    "verify": "timeout 300 sh -c 'pnpm -s test && pnpm -s typecheck && pnpm -s check-all --propose'",
+    "drawing-issues": "node packages/ui/src/check/cli.ts --issues",
+    "docs-all": "node scripts/docs-all.mjs",
+    "ui-check": "node scripts/ui-checks/phone.mjs && node scripts/ui-checks/overlap.mjs 1400 && node scripts/ui-checks/stable.mjs 1400",
+    "ui-check:install": "playwright install chromium"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "playwright": "1.60.0",
+    "typescript": "^5.7.2"
+  }
+}

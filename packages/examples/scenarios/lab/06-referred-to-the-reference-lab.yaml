@@ -1,0 +1,46 @@
+# A test the local lab does not run: the sample is received at LAB1, packed and couriered on to the
+# reference lab, which analyses it. LAB1 is a site on the way, like the clinic — so its scans repeat
+# the clinic's, and the flow board draws the second leg as a loop back up. Only the last step is
+# linked: the rest keeps plan order.
+scenario: referred to the reference lab — received at the local lab and sent on
+drawing: sample-to-result
+tags: [happy, referral]
+why: [R4]
+given:
+  at: 2026-03-02T08:00:00Z
+  phase: Planning
+  send:
+    - Request#R6.Create: { patient: P6, samples: [S8] }
+    - Route#R6-REF1.Plan: { request: R6, lab: REF1, tubes: [ { sample: S8, tube: serum } ] }
+    - SiteVisit#R6-CLIN1.Plan: { route: R6-REF1, site: CLIN1, samples: [S8] }
+    - CourierRun#R6-C1.Plan: { route: R6-REF1, origin: CLIN1, destination: LAB1, by: courier 7, samples: [S8] }
+    - SiteVisit#R6-LAB1.Plan: { route: R6-REF1, site: LAB1, samples: [S8] }
+    - CourierRun#R6-C2.Plan: { route: R6-REF1, origin: LAB1, destination: REF1, by: courier 9, samples: [S8] }
+    - Analysis#R6-SPEC.Plan: { route: R6-REF1, site: REF1, department: special chemistry, stability: 48h, samples: [S8] }
+    - Route#R6-REF1.Link: { link: R6-SPEC-after-C2, before: "CourierRun#R6-C2", after: "Analysis#R6-SPEC" }
+    - Route#R6-REF1.Instruct: { kind: temperature, detail: frozen }
+when:
+  - phase: To the local lab
+  - send: { Sample#S8.Scan: { scanId: c-S8, event: Collected, site: CLIN1 } }
+  - send: { Sample#S8.Scan: { scanId: p-S8, event: Packed, site: CLIN1 } }
+  - send: { Sample#S8.Scan: { scanId: u-S8, event: PickedUp, site: CLIN1 } }
+  - send: { Sample#S8.Scan: { scanId: d-S8, event: Delivered, site: LAB1 } }
+  - send: { Sample#S8.Scan: { scanId: r-S8, event: Received, site: LAB1 } }
+  - expect_state: { SiteVisit#R6-LAB1: in_progress }
+  - phase: On to the reference lab
+  - send: { Sample#S8.Scan: { scanId: p2-S8, event: Packed, site: LAB1 } }
+  - send: { Sample#S8.Scan: { scanId: u2-S8, event: PickedUp, site: LAB1 } }
+  - advance: 1d
+  - send: { Sample#S8.Scan: { scanId: d2-S8, event: Delivered, site: REF1 } }
+  - send: { Sample#S8.Scan: { scanId: r2-S8, event: Received, site: REF1 } }
+  - send: { Sample#S8.Scan: { scanId: a-S8, event: Analysed, site: REF1 } }
+  - send: { Sample#S8.Scan: { scanId: x-S8, event: Released, site: REF1 } }
+then:
+  - state:
+      SiteVisit#R6-LAB1: completed
+      CourierRun#R6-C2: completed
+      Analysis#R6-SPEC: completed
+      Request#R6: completed
+      PatientView#R6: results_ready
+  - data: { Route#R6-REF1: { instructions: [ { kind: temperature, detail: frozen } ] } }
+  - no_findings: [error, warning]

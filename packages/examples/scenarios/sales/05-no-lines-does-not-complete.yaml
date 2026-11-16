@@ -1,0 +1,12 @@
+# R45 / ADR 0004 §3: `all_final` is false over an empty collection, so an order with no
+# lines does not complete itself the moment it is paid.
+scenario: an order with no lines does not complete itself
+given:
+  at: 2026-01-01T09:00:00Z
+  send:
+    - Order#E1.Place: { total: 10, items: [] }
+    - Order#E1.Pay: { paymentId: p10, amount: 10 }
+then:
+  - state: { Order#E1: fulfilling.shipping }
+  - not_emitted: [OrderCompleted, OrderPartiallyShipped]
+  - no_findings: [error, warning]

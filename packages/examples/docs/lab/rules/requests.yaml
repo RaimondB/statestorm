@@ -1,0 +1,30 @@
+# yaml-language-server: $schema=../.schemas/rules.schema.json
+title: Requests and routes
+canvas:
+  purpose: the doctor's request for one patient, and the route its samples take to each lab
+  packages: [Requests]
+rules:
+  - id: R4
+    title: A request is for one patient, with a route per lab
+    kind: definitional
+    status: agreed
+    decided: { session: 1, date: 2026-03-02 }
+    text: >-
+      A request is for one patient. It has one route per lab its samples go to; a sample referred
+      on to a reference lab is on that lab's route.
+  - id: R5
+    title: A request ends when its routes have
+    kind: behavioural
+    status: agreed
+    decided: { session: 1, date: 2026-03-02 }
+    text: >-
+      When every route has ended, the request is completed if all were, partially completed if any
+      route completed or partly completed, and failed otherwise.
+  - id: R6
+    title: A sample stopped anywhere on the route was not reported
+    kind: behavioural
+    status: agreed
+    decided: { session: 1, date: 2026-03-02 }
+    text: >-
+      A sample that stops anywhere on its route — haemolysed, missing, rejected, too old — fails the
+      route's report for it. One that stops before it is collected does not count either way.

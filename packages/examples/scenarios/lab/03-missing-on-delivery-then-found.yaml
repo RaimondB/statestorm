@@ -1,0 +1,46 @@
+# The courier delivers, but the tube is not in the box: reported missing at the lab. The steps at
+# the lab wait. It turns up — the person resolves the deviation, the steps are open again, and the
+# sample goes on as if nothing happened. Nothing failed, so nobody is told anything.
+scenario: missing on delivery, then found — resolved, and the sample goes on
+drawing: sample-to-result
+tags: [deviation, missing]
+why: [R8]
+given:
+  at: 2026-03-02T08:00:00Z
+  phase: Planning
+  send:
+    - Request#R3.Create: { patient: P3, samples: [S4] }
+    - Route#R3-LAB1.Plan: { request: R3, lab: LAB1, tubes: [ { sample: S4, tube: edta } ] }
+    - SiteVisit#R3-CLIN1.Plan: { route: R3-LAB1, site: CLIN1, samples: [S4] }
+    - CourierRun#R3-C1.Plan: { route: R3-LAB1, origin: CLIN1, destination: LAB1, by: courier 2, samples: [S4] }
+    - Analysis#R3-HAEM.Plan: { route: R3-LAB1, site: LAB1, department: haematology, stability: 24h, samples: [S4] }
+when:
+  - phase: To the lab
+  - send: { Sample#S4.Scan: { scanId: c-S4, event: Collected, site: CLIN1 } }
+  - send: { Sample#S4.Scan: { scanId: p-S4, event: Packed, site: CLIN1 } }
+  - send: { Sample#S4.Scan: { scanId: u-S4, event: PickedUp, site: CLIN1 } }
+  - phase: Missing
+  - send: { Sample#S4.Scan: { scanId: m-S4, event: Missing, site: LAB1, reason: not in the box } }
+  - expect_state:
+      SampleDeviation#m-S4: pending
+      TransferHandling#R3-C1-deliver-S4: open.on_hold
+      AnalysisHandling#R3-HAEM-receive-S4: open.on_hold
+      TransferHandling#R3-C1-pickup-S4: completed        # not at the lab: untouched
+  - phase: Found
+  - send: { SampleDeviation#m-S4.Resolve: {} }
+  - expect_state:
+      TransferHandling#R3-C1-deliver-S4: open.expected
+      AnalysisHandling#R3-HAEM-receive-S4: open.expected.waiting
+      AnalysisHandling#R3-HAEM-run-S4: open.expected.ageing    # the sample ages again
+  - send: { Sample#S4.Scan: { scanId: d-S4, event: Delivered, site: LAB1 } }
+  - send: { Sample#S4.Scan: { scanId: r-S4, event: Received, site: LAB1 } }
+  - send: { Sample#S4.Scan: { scanId: a-S4, event: Analysed, site: LAB1 } }
+  - send: { Sample#S4.Scan: { scanId: x-S4, event: Released, site: LAB1 } }
+then:
+  - state:
+      SampleDeviation#m-S4: resolved
+      Analysis#R3-HAEM: completed
+      Request#R3: completed
+      PatientView#R3: results_ready
+  - not_emitted: [SampleStopped]
+  - no_findings: [error, warning]

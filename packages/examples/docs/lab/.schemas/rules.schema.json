@@ -1,0 +1,204 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "A topic of a domain's rules",
+  "description": "docs/rules/<topic>.yaml in a domain folder: the rules about one topic, as they hold today (ADR 0016). How they got there is in docs/decisions/; the rulebook in docs/rulebook/ is generated from these files.",
+  "type": "object",
+  "required": [
+    "title",
+    "rules"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "The topic's name, as the rulebook heads it."
+    },
+    "canvas": {
+      "type": "object",
+      "description": "The parts of the Bounded Context Canvas that must be written. The commands in, the events out and the policies are derived from the model when the rulebook is generated.",
+      "additionalProperties": false,
+      "properties": {
+        "purpose": {
+          "type": "string",
+          "description": "What this part of the domain is for, in a sentence or two."
+        },
+        "packages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true,
+          "description": "The model's packages this topic is about (ADR 0013); checked against the model."
+        },
+        "types": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true,
+          "description": "Types this topic is about outside those packages; checked against the model. A cross-cutting topic names neither."
+        }
+      }
+    },
+    "rules": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/rule"
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^\\S+$",
+      "description": "Any id without spaces, unique across the domain's rules, questions and drawing issues (R12). The platform gives ids no shape."
+    },
+    "ids": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/id"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "rule": {
+      "type": "object",
+      "required": [
+        "id",
+        "title",
+        "kind",
+        "status",
+        "text"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "title": {
+          "type": "string",
+          "description": "One line: what the rule says."
+        },
+        "kind": {
+          "enum": [
+            "definitional",
+            "behavioural",
+            "table"
+          ],
+          "description": "definitional: what something is (a request has one route per lab its samples go to). behavioural: what must or may happen (a sample past its stability is not run). table: a decision table, given in `table`."
+        },
+        "status": {
+          "enum": [
+            "agreed",
+            "to-confirm",
+            "deferred",
+            "superseded"
+          ],
+          "description": "agreed: the domain owner agreed it. to-confirm: built on a leaning the owner has not yet confirmed. deferred: left out on purpose, so it is not mistaken for a gap. superseded: replaced by a newer rule that says `supersedes:` it."
+        },
+        "text": {
+          "type": "string",
+          "description": "The rule as it holds today, in the domain's words. When a newer rule revises this one, this text is rewritten to what still holds; the old wording stays in the decision log."
+        },
+        "table": {
+          "type": "object",
+          "description": "For kind: table — the decision table: one column per input and outcome, one row per case.",
+          "required": [
+            "columns",
+            "rows"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "columns": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 2
+            },
+            "rows": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": [
+                    "string",
+                    "number",
+                    "boolean"
+                  ]
+                }
+              },
+              "minItems": 1
+            }
+          }
+        },
+        "refines": {
+          "$ref": "#/$defs/ids",
+          "description": "Earlier rules this one adds to; both hold. Said only here — the back-link is derived."
+        },
+        "revises": {
+          "$ref": "#/$defs/ids",
+          "description": "Earlier rules this one changes part of; their text is rewritten to what still holds. Said only here — the back-link is derived."
+        },
+        "supersedes": {
+          "$ref": "#/$defs/ids",
+          "description": "Earlier rules this one replaces; each must have status: superseded. Said only here — the back-link is derived."
+        },
+        "decided": {
+          "type": "object",
+          "description": "Where it was decided: the session's log in docs/decisions/, and the questions it answers.",
+          "required": [
+            "date"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "session": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "The number of the log, docs/decisions/NN-<date>-<what>.md."
+            },
+            "date": {
+              "type": "string",
+              "format": "date"
+            },
+            "questions": {
+              "$ref": "#/$defs/ids",
+              "description": "The questions (questions.yaml) this rule answers."
+            }
+          }
+        },
+        "untraced": {
+          "type": "string",
+          "description": "Why no model element or no scenario cites this rule, when that is right (a statement about the organisation, nothing to build). Without it, an agreed or to-confirm rule nothing cites is a finding."
+        },
+        "release": {
+          "description": "the release of the lab system it is built in",
+          "enum": [
+            "1",
+            "2"
+          ]
+        }
+      },
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "table"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "table"
+        ]
+      },
+      "else": {
+        "not": {
+          "required": [
+            "table"
+          ]
+        }
+      },
+      "unevaluatedProperties": false
+    }
+  }
+}

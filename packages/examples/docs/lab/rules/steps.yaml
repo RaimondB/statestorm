@@ -1,0 +1,38 @@
+# yaml-language-server: $schema=../.schemas/rules.schema.json
+title: Steps and their roll-up
+canvas:
+  purpose: the generic step — its tasks by stage, a handling per sample, and the roll-up every step shares
+  packages: [Steps]
+rules:
+  - id: R1
+    title: A step rolls up from its tasks, one per stage
+    kind: definitional
+    status: agreed
+    decided: { session: 1, date: 2026-03-02 }
+    text: >-
+      Every step of a route — a site visit, a transfer, an analysis, and the route itself — has a
+      task per stage (start, middle, final) and, on each task, a handling per sample. A step's
+      status is read from its tasks', a task's from its handlings'.
+  - id: R2
+    title: The latest stage reached decides failure
+    kind: table
+    status: agreed
+    decided: { session: 1, date: 2026-03-02 }
+    text: >-
+      When every task of a step has ended, the latest stage that had work to do decides: if none of
+      its tasks completed, the step failed.
+    table:
+      columns: [final stage, middle stage, start stage, the step]
+      rows:
+        - [none completed, any, any, failed]
+        - [not needed, none completed, any, failed]
+        - [not needed, not needed, none completed, failed]
+        - [all completed, all completed, all completed, completed]
+  - id: R3
+    title: A sample stopped elsewhere counts neither way
+    kind: behavioural
+    status: agreed
+    decided: { session: 1, date: 2026-03-02 }
+    text: >-
+      A task still waiting for a sample that failed earlier no longer expects it. A task none of
+      whose samples reached it is not needed — not failed.

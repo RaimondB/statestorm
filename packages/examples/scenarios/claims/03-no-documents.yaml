@@ -1,0 +1,16 @@
+# A deadline three levels down whose target is at the root: leaving every enclosing
+# composite at once.
+scenario: a claim without documents is reminded, then rejected
+given:
+  at: 2026-01-01T09:00:00Z
+  send:
+    - Claim#N1.Submit: { amount: 800 }
+when:
+  - advance: 14d
+  - expect_state: { Claim#N1: handling.intake.reminded }
+  - advance: 14d
+then:
+  - state: { Claim#N1: rejected }
+  - emitted: [DocumentsRequested, ClaimRejected]
+  - not_in_state: { Claim#N1: handling }
+  - no_findings: [error, warning]

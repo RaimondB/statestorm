@@ -1,0 +1,19 @@
+# R21a: two levels handle Withdraw. The inner one wins while its guard holds; once a
+# document is in, its guard fails and the command bubbles to the outer one. Same target,
+# different handler — invisible unless something records which level won.
+scenario: the inner Withdraw wins before documents, the outer one after
+given:
+  at: 2026-01-01T09:00:00Z
+  send:
+    - Claim#E1.Submit: { amount: 100 }
+    - Claim#E2.Submit: { amount: 100 }
+    - Claim#E2.DocumentsReceived: { batchId: e2-docs, count: 1 }
+when:
+  - send: { Claim#E1.Withdraw: {} }
+  - send: { Claim#E2.Withdraw: {} }
+then:
+  - state: { Claim#E1: withdrawn, Claim#E2: withdrawn }
+  - data:
+      Claim#E1: { withdrawnFrom: intake }
+      Claim#E2: { withdrawnFrom: handling, documents: 1 }
+  - no_findings: [error, warning]
