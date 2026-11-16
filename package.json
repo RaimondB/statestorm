@@ -1,6 +1,6 @@
 {
   "name": "statestorm",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Interactive workbench for designing, running and explaining domain models built from aggregates that raise events",
   "license": "LGPL-3.0-or-later",
