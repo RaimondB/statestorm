@@ -12,7 +12,8 @@ platform, person or agent. A domain's own work is in that domain's repo, not her
 - **Done is deleted.** The pull request that finishes an item removes it from this file; its
   description and the commits say what was built. Nothing here is kept for history — git keeps it.
 - **Found something?** Add an item at the end of its section with the next free id (ids are never
-  reused). Say what it is, why it matters, and how you would know it is done.
+  reused). Say what it is, why it matters, and how you would know it is done. Write it in the examples'
+  words (`lab`, `sales`, `claims`), never a domain's — the neutrality check reads this file too.
 - **Not everything goes here.** A decision about the kernel is an ADR (`docs/adr/`, needed for every
   new kernel feature — AGENTS.md); a design question still open, with its leaning, is in
   [docs/open-questions.md](docs/open-questions.md); the requirements are in

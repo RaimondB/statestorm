@@ -245,7 +245,7 @@ The instructions for agents are in [AGENTS.md](AGENTS.md): Claude Code reads the
 [CLAUDE.md](CLAUDE.md), GitHub Copilot reads `AGENTS.md` (and
 [.github/copilot-instructions.md](.github/copilot-instructions.md) where it does not, such as code
 review). The working method is a set of skills in `.claude/skills/` — domain-session,
-model-authoring, scenario-loop, capture-drawing, model-check — which both Claude Code and Copilot
+model-authoring, scenario-loop, capture-drawing, model-check, platform-change — which both Claude Code and Copilot
 (agent mode, CLI, cloud agent) load.
 
 ## Find your way

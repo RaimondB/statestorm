@@ -11,8 +11,10 @@ The essentials, for where AGENTS.md is not read (code review, chat on github.com
   also the test fixtures.
 - `pnpm verify` (tests, typecheck, the model check of every example) must pass and stay under five
   minutes.
-- The kernel stays generic: no domain words in it. A new kernel feature needs an ADR in
-  `docs/adr/` and a scenario that cannot be written without it.
+- Nothing of a real domain goes in — not in code, tests, comments, ADRs, docs, images or commit
+  messages: examples use `lab`, `sales` or `claims` (AGENTS.md, "Keep it neutral"; `pnpm neutral`).
+  A new kernel feature needs an ADR in `docs/adr/` (`TEMPLATE.md`) and a scenario that cannot be
+  written without it.
 - Every behaviour has a scenario, and every rule a mutation check: a scenario that passes the first
   time is suspect until a broken rule makes it fail.
 - After a UI change: rebuild what runs (`docker compose up -d --build`), look at a screenshot, and
