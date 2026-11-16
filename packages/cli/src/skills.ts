@@ -105,8 +105,12 @@ export function syncSkills(domain: string, o: { check?: boolean; force?: boolean
 /** `skills <domain folder> [--check] [--force]`: exit 1 when, with --check, anything is behind; or when a copy was edited here. */
 export function skills(args: string[]): number {
   const [dir] = args.filter((a) => !a.startsWith("--"));
-  if (!dir || !existsSync(join(dir, "model.yaml"))) {
+  if (!dir) {
     console.error("usage: statestorm skills <domain folder> [--check] [--force]");
+    return 2;
+  }
+  if (!existsSync(join(dir, "model.yaml"))) {
+    console.error(`statestorm skills: ${dir} is not a domain folder yet — it has no model.yaml. Write one (README, "Your own domain"), then run this again.`);
     return 2;
   }
   const check = args.includes("--check");

@@ -413,3 +413,12 @@ test("statestorm share --agenda shares only the agenda's scenarios, opening on i
   assert.notEqual(wrong.status, 0);
   assert.match(wrong.stderr, /--agenda: no agendas\/nope\.yaml in lab — there are ward-review/);
 });
+
+test("statestorm skills in a folder with no model yet says what is missing, not only how to call it", () => {
+  const dir = mkdtempSync(join(tmpdir(), "statestorm-new-"));
+  const r = spawnSync(process.execPath, [cli, "skills", dir], { encoding: "utf8" });
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /not a domain folder yet — it has no model\.yaml/);
+  const none = spawnSync(process.execPath, [cli, "skills"], { encoding: "utf8" });
+  assert.match(none.stderr, /^usage: statestorm skills/);
+});
