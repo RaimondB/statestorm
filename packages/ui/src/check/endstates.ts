@@ -9,7 +9,16 @@ export interface Unfinished { key: string; state: string }
 
 export function livesOnOf(model: Model): Record<string, string> {
   const cov = model.coverage as { lives_on?: Record<string, unknown> } | undefined;
+  if (Array.isArray(cov?.lives_on)) return {};   // the wrong shape: said by livesOnShape, not read as types `0`, `1`
   return Object.fromEntries(Object.entries(cov?.lives_on ?? {}).map(([k, v]) => [k, String(v)]));
+}
+
+/** `coverage.lives_on` written as a list: each type needs its reason, so say the shape it takes. */
+export function livesOnShape(model: Model): string | undefined {
+  const cov = model.coverage as { lives_on?: unknown } | undefined;
+  if (!Array.isArray(cov?.lives_on)) return undefined;
+  const first = String(cov.lives_on[0] ?? "Type");
+  return `coverage.lives_on takes each type with the reason it never finishes — \`lives_on: { ${first}: <why> }\` — not a list`;
 }
 
 /** The objects of a finished run that are not in an end state, except those that live on. */

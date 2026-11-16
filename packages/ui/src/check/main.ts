@@ -18,7 +18,7 @@ import { assignScenarios, compareDrawings, issuesMarkdown, offDrawing, parseDraw
 import { coverage } from "./coverage.ts";
 import { contributions } from "./contribution.ts";
 import { unanswered } from "./unanswered.ts";
-import { staleLivesOn, unfinished } from "./endstates.ts";
+import { livesOnShape, staleLivesOn, unfinished } from "./endstates.ts";
 import { staticChecks } from "./statics.ts";
 import { proposalYaml, type NoProposal, type Proposal } from "./propose.ts";
 import { readDocs, trace, type Docs, type Trace } from "./docs.ts";
@@ -321,6 +321,8 @@ export async function check(args: string[]): Promise<number> {
     open++;
     say("warning", `${e.file} ends with ${left.length} not finished: ${left.slice(0, 6).map((u) => `${u.key} (${u.state})`).join(", ")}${left.length > 6 ? ", …" : ""}`);
   }
+  const shape = livesOnShape(model);
+  if (shape) say("warning", shape);
   for (const t of staleLivesOn(model)) say("warning", `coverage.lives_on: \`${t}\` is no type of the model — stale`);
   console.log(`  ${ends.length - open}/${ends.length} scenarios end with everything finished (coverage.lives_on: types that live on)`);
 
