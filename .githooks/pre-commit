@@ -1,0 +1,4 @@
+#!/bin/sh
+# statestorm's own pre-commit hook: nothing of a real domain in what is committed (AGENTS.md,
+# "Keep it neutral"). Switched on once per clone: pnpm hooks. `git commit --no-verify` skips it.
+exec node scripts/neutral/check.mjs --staged

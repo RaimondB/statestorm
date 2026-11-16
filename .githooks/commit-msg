@@ -1,0 +1,3 @@
+#!/bin/sh
+# statestorm's own commit-msg hook: nothing of a real domain in the message, the author or the branch.
+exec node scripts/neutral/check.mjs --message "$1"

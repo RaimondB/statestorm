@@ -1,0 +1,23 @@
+# What the neutrality check (scripts/neutral/) allows although it looks like a leak — a line each:
+#   email: <address>   github: <owner>   file: <path of an image>   term: <a word a domain also uses>
+# Keep it short, and never put a domain's word here to silence it: say the thing in the neutral
+# examples' words instead. A `term:` is for an ordinary word a domain happens to use as well.
+email: git@github.com
+email: noreply@anthropic.com
+github: RaimondB
+
+# Ordinary words and abbreviations a domain happens to use too.
+term: API
+term: CC
+term: comes back
+term: D-01
+term: delivery order
+term: hand over
+term: left behind
+term: not attempted
+term: phase 1
+term: pickup task
+term: roadmap phase
+term: shared library
+term: take back
+term: taken over
