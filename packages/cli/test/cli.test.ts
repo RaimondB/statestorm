@@ -422,3 +422,24 @@ test("statestorm skills in a folder with no model yet says what is missing, not 
   const none = spawnSync(process.execPath, [cli, "skills"], { encoding: "utf8" });
   assert.match(none.stderr, /^usage: statestorm skills/);
 });
+
+test("statestorm dev on a port already in use says so and how to choose another", async () => {
+  const { createServer } = await import("node:net");
+  const busy = createServer();
+  await new Promise<void>((ok) => busy.listen(0, () => ok()));
+  const port = (busy.address() as { port: number }).port;
+  try {
+    const { spawn } = await import("node:child_process");
+    const child = spawn(process.execPath, [cli, "dev", labDomain(), `--port=${port}`], { stdio: ["ignore", "pipe", "pipe"] });
+    let err = "";
+    child.stderr.on("data", (d) => (err += d));
+    const code = await new Promise<number | null>((ok) => {
+      const t = setTimeout(() => { child.kill(); ok(null); }, 10000);
+      child.on("exit", (c) => { clearTimeout(t); ok(c); });
+    });
+    assert.equal(code, 1, "it stops rather than hanging or throwing");
+    assert.match(err, new RegExp(`port ${port} is in use .* --port=<n>`));
+  } finally {
+    busy.close();
+  }
+});

@@ -133,6 +133,11 @@ function dev(args: string[]): number {
     } catch (e) {
       res.writeHead(500, { "content-type": "text/plain" }).end(e instanceof Error ? e.message : String(e));
     }
+  }).on("error", (e: NodeJS.ErrnoException) => {
+    console.error(e.code === "EADDRINUSE"
+      ? `statestorm dev: port ${port} is in use — another workbench may be running there; choose another with --port=<n>`
+      : `statestorm dev: ${e.message}`);
+    process.exit(1);
   }).listen(port, () => {
     console.log(`statestorm: http://localhost:${port}/ — ${names.join(", ")}; reload the page to read the files again`);
   });
