@@ -67,7 +67,7 @@ export function ScenarioPicker({ groups, value, label, nameOf, onChoose }: {
       <input
         ref={input}
         role="combobox" aria-expanded={open} aria-label="Scenario — type a number or part of its name"
-        placeholder={open ? "type: 39a, cancel, reverse pick…" : undefined}
+        placeholder={open ? "type: 02, cancel, haemolysed…" : undefined}
         value={open ? query : value ? label(value) : "— free run —"}
         onFocus={() => { setOpen(true); setQuery(""); setActive(Math.max(0, choices.indexOf(value))); }}
         onBlur={() => { setOpen(false); setQuery(""); }}

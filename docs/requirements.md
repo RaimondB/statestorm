@@ -246,7 +246,7 @@ them. It refines R33 (coverage) and R22 (loud modelling errors).
 - **MC-15** **Tags** (the domain owner, 2026-10-21: "each drawing group of scenarios also contains a
   happy path … indicate which ones are happy and which are deviation scenarios … a way to show all
   cancellation scenarios together"). A scenario's `tags:` say its kind — `happy` or `deviation`,
-  exactly one — and what it is about (`cancellation`, `missing`, `internal-return`, …). The check
+  exactly one — and what it is about (`cancellation`, `missing`, `haemolysed`, …). The check
   warns on a scenario without one kind and on a drawing whose scenarios have no happy path. The
   picker marks ✓ happy and ⚠ deviation and filters by tag; on Flow, the arrows of every scenario
   with a tag. A tag shaped like an id in a list kept elsewhere — a test plan's `WOM-12`, a ticket

@@ -16,8 +16,8 @@
 ADR 0018 has two groupings of sub-systems — systems and bounded contexts — and systems outside the
 model that only send and receive. Declaring a real landscape showed five things it cannot say:
 
-1. Systems belong to larger scopes of an organisation's landscape: the eight systems of one scope, a
-   neighbouring scope's order management, a third's warehouse systems. A view above the systems is
+1. Systems belong to larger scopes of an organisation's landscape: one scope's own systems, a
+   neighbouring scope's, a third's. A view above the systems is
    wanted, where a whole scope is one box.
 2. Logic the domain specifies can run in a system it does not own: what the customer is told is modelled
    here, but runs in a vendor's notification system. ADR 0018 lets an external system hold no packages,

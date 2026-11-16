@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { loadModel } from "../src/model.ts";
 import { advance, createWorld, send, stateOf } from "../src/engine.ts";
 
-// ADR 0014: a deadline read from the instance's own data — a holding time per place, copied
+// ADR 0014: a deadline read from the instance's own data — a time limit per place, copied
 // onto the parcel when it was planned. Parcels are entities of an order (the timer fires
 // inside the aggregate's step).
 const MODEL = `

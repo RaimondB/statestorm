@@ -366,7 +366,7 @@ export interface Box {
     rel: string;
     mode: "row" | "sequence" | "band";
     children: Box[];
-    /** A sequence with links between its boxes, laid out in layers: [[AMS, RTM], [MM-AMS, MM-RTM], [UTR], [LM]]. */
+    /** A sequence with links between its boxes, laid out in layers: [[visit A, visit B], [run A, run B], [receipt], [analysis]]. */
     layers?: Box[][];
   }[];
   /** Unit keys this box's hidden associations point at — what travels through it. */
@@ -608,7 +608,7 @@ export function buildOverview(model: Model, frame: Frame, log: LogEntry[], confi
     // Where the links say nothing, plan order still does: an activity no link mentions follows
     // the one planned before it, and is followed by the one planned after. A plan that links
     // only its redelivery keeps the rest of its journey in a line. Plan order never overrules a
-    // link: a step linked in later (a second attempt, a pre-sort) is planned last, yet comes
+    // link: a step linked in later (a second attempt, a re-check) is planned last, yet comes
     // where its links put it — so no plan-order edge is added against a path the links already make.
     const mentioned = new Set(edges.flat());
     const reaches = (from: string, to: string): boolean => {

@@ -77,8 +77,8 @@ function commandOf(raw: Raw, where: string): CommandDef | undefined {
 }
 
 /**
- * A field spec of a value object or a payload: `string`, `number?` (optional), `UnitRow`,
- * `[UnitRow]` (a list — payloads only).
+ * A field spec of a value object or a payload: `string`, `number?` (optional), `TubeRow`,
+ * `[TubeRow]` (a list — payloads only).
  */
 function shapeField(raw: unknown, where: string, lists: boolean): ShapeField {
   let text = String(raw).trim();
