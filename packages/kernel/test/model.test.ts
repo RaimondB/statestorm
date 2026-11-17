@@ -112,3 +112,17 @@ test("why: is a list of ids — anything else is refused at load (ADR 0016)", ()
   for (const why of ["R3", "[]", "[12]", "['two words']"]) assert.throws(bad(why), /why: a list of the ids/, why);
   assert.throws(() => loadModel(WHY.replace("why: [R1]", "why: R1")), /packages\.P\.why/);
 });
+
+test("a data field named like the instance's own id, type or state is a load error — it would never be read", () => {
+  for (const name of ["id", "type", "state"]) {
+    assert.throws(() => loadModel(`
+context: T
+aggregates:
+  Site:
+    creators: [Register]
+    data: { ${name}: { type: string } }
+    initial: known
+    states: { known: { on: { Register: {} } } }
+`), new RegExp(`Site\\.data\\.${name}: \`${name}\` is the instance's own`));
+  }
+});

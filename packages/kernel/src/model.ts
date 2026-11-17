@@ -387,6 +387,20 @@ function lint(machine: MachineDef): ModelFinding[] {
 let knownValues = new Set<string>();
 let knownValueDefs: Record<string, ValueDef> = {};
 
+/** What every rule and template already reads by these names: an instance's own id, type and state. */
+const BUILT_IN = ["id", "type", "state"];
+
+/** An aggregate's data: a field may not take a name the kernel gives every instance — it would never be read. */
+function dataFields(raw: Raw, where: string): Record<string, FieldDef> {
+  const out = fields(raw, where);
+  for (const name of Object.keys(out)) {
+    if (BUILT_IN.includes(name)) {
+      throw new ModelError(`${where}.${name}: \`${name}\` is the instance's own (${BUILT_IN.join(", ")}) — \`\${${name}}\` and a guard's \`${name}\` read that, never this field; name it for what it holds`);
+    }
+  }
+  return out;
+}
+
 function fields(raw: Raw, where: string): Record<string, FieldDef> {
   const out: Record<string, FieldDef> = {};
   for (const [name, spec] of Object.entries(asRecord(raw, where))) {
@@ -483,7 +497,7 @@ function machine(name: string, raw: Raw, kind: MachineDef["kind"]): MachineDef {
     ancestors: (raw[ANCESTORS] as string[] | undefined) ?? [],
     initial,
     states,
-    data: fields(raw.data, `${name}.data`),
+    data: dataFields(raw.data, `${name}.data`),
     children: relations(raw.children, `${name}.children`, name),
     references: references(raw.references, `${name}.references`),
     creators: (raw.creators ?? []).map(String),
