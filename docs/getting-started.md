@@ -186,6 +186,10 @@ then:
 pnpm test
 ```
 
+**Master data most scenarios need** — the places, the parties — is written once: a file in a folder
+below `scenarios/` with only `send:`, which a scenario names in `given: include: [given/places.yaml]`; its
+sends run first ([ADR 0029](adr/0029-a-shared-set-up-for-scenarios.md)).
+
 Each scenario runs under seven **schedules** — in order (`fifo`), in five random orders, and with
 every message delivered twice (`duplicate`) — because real messaging does all three; `14/14 runs passed`. `pnpm exec statestorm test . --trace` prints the story
 of a run: who caused what, and why a command changed nothing.

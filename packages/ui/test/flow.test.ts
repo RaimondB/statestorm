@@ -6,6 +6,8 @@ import { parseScenario } from "@statestorm/scenarios";
 import { buildFlow, flowConfig, layoutFlow, NODE, trailOf } from "../src/flow.ts";
 import { overviewConfig } from "../src/overview.ts";
 import { actionsOf, play } from "../src/session.ts";
+import { fileURLToPath } from "node:url";
+import { readScenario } from "@statestorm/scenarios/files";
 
 const examples = new URL("../../examples/", import.meta.url);
 const load = (name: string) => loadModel(readFileSync(new URL(`models/${name}.yaml`, examples), "utf8"));
@@ -13,7 +15,7 @@ const fifo = { kind: "fifo" } as const;
 const runsOf = (model: Model, name: string) => {
   const dir = new URL(`scenarios/${name}/`, examples);
   return readdirSync(dir).filter((f) => f.endsWith(".yaml")).sort().map((f) => {
-    const sc = parseScenario(readFileSync(new URL(f, dir), "utf8"));
+    const sc = readScenario(fileURLToPath(new URL(f, dir)));
     return play(model, actionsOf(sc), fifo, sc.given.at);
   });
 };

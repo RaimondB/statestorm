@@ -19,8 +19,9 @@ export interface Scenario {
   why?: string[];
   /** Omitted means `fifo` — the one readable story. Chaos is a deliberate second pass. */
   schedule?: Schedule;
-  /** `phase:` names the set-up, so a viewer can jump past it ("Planning"). */
-  given: { at?: string; phase?: string; send: { ref: string; payload: Record<string, Json> }[] };
+  /** `phase:` names the set-up, so a viewer can jump past it ("Planning"). `include:` names the shared
+   *  set-ups it starts with (ADR 0029); their sends come first in `send`, in the order included. */
+  given: { at?: string; phase?: string; include?: string[]; send: { ref: string; payload: Record<string, Json> }[] };
   when: Step[];
   then: Assertion[];
 }
@@ -97,9 +98,62 @@ function whyOf(v: unknown, file?: string): string[] {
   return v as string[];
 }
 
-export function parseScenario(text: string, file?: string): Scenario {
+/**
+ * A file of the scenarios folder by its path there (`given/places.yaml`), or undefined if there is none —
+ * the disk's on the command line, the files a folder gave in the browser (ADR 0029).
+ */
+export type ScenarioFiles = (path: string) => string | undefined;
+
+/** `a/b/../c.yaml` → `a/c.yaml`; a path that leaves the scenarios folder is refused. */
+function normalise(path: string, where: string): string {
+  const out: string[] = [];
+  for (const seg of path.split("/")) {
+    if (seg === "" || seg === ".") continue;
+    if (seg === "..") {
+      if (!out.length) throw new Error(`${where}: \`${path}\` leaves the scenarios folder — a shared set-up lives in it`);
+      out.pop();
+    } else out.push(seg);
+  }
+  return out.join("/");
+}
+
+function includeList(v: unknown, where: string): string[] {
+  if (v === undefined) return [];
+  const list = Array.isArray(v) ? v : [v];
+  return list.map((p) => {
+    const path = String(p);
+    if (!path.endsWith(".yaml")) throw new Error(`${where}: include: \`${path}\` — a shared set-up is a .yaml file`);
+    return path;
+  });
+}
+
+/**
+ * The sends of the shared set-ups a scenario includes, in order — each one's own includes first.
+ * A set-up holds `send:` and may `include:` others, by path relative to its own folder (ADR 0029).
+ */
+function includedSends(paths: string[], from: string, where: string, read: ScenarioFiles | undefined, seen: string[]): { ref: string; payload: Record<string, Json> }[] {
+  const out: { ref: string; payload: Record<string, Json> }[] = [];
+  const dir = from.includes("/") ? from.slice(0, from.lastIndexOf("/") + 1) : "";
+  for (const p of paths) {
+    const path = normalise(dir + p, where);
+    if (seen.includes(path)) throw new Error(`${where}: include: ${[...seen, path].join(" → ")} — a set-up that includes itself`);
+    if (!read) throw new Error(`${where}: include: \`${path}\` — the scenario was read without its folder's files`);
+    const text = read(path);
+    if (text === undefined) throw new Error(`${where}: include: no \`${path}\` in the scenarios folder`);
+    const raw = (parseYaml(text) ?? {}) as Record<string, unknown>;
+    if (typeof raw !== "object" || Array.isArray(raw)) throw new Error(`${path}: a shared set-up is a mapping of \`include:\` and \`send:\``);
+    const extra = Object.keys(raw).filter((k) => k !== "include" && k !== "send");
+    if (extra.length) throw new Error(`${path}: ${extra.map((k) => `\`${k}:\``).join(", ")} — a shared set-up holds only \`include:\` and \`send:\``);
+    out.push(...includedSends(includeList(raw.include, path), path, path, read, [...seen, path]), ...sends(raw.send));
+  }
+  return out;
+}
+
+export function parseScenario(text: string, file?: string, read?: ScenarioFiles): Scenario {
   const raw = parseYaml(text) as Record<string, any>;
   const given = raw.given ?? {};
+  const where = file ?? "scenario";
+  const include = includeList(given.include, where);
   return {
     name: String(raw.scenario ?? file ?? "unnamed"),
     file,
@@ -110,7 +164,8 @@ export function parseScenario(text: string, file?: string): Scenario {
     given: {
       at: given.at ? String(given.at) : undefined,
       phase: given.phase === undefined ? undefined : String(given.phase),
-      send: sends(given.send),
+      ...(include.length ? { include } : {}),
+      send: [...includedSends(include, "", where, read, []), ...sends(given.send)],
     },
     when: ((raw.when ?? []) as Record<string, any>[]).map((item): Step => {
       if (item.phase !== undefined) return { step: "phase", name: String(item.phase) };

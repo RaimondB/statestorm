@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { isA, loadModel, narrowedBy, senderOfCommand, type Json } from "@statestorm/kernel";
 import { parseScenario, realWorldSchedules, runScenario } from "@statestorm/scenarios";
 import { crossings } from "./roles.ts";
-import { readModel, readModelFiles } from "@statestorm/scenarios/files";
+import { readModel, readModelFiles, readScenario } from "@statestorm/scenarios/files";
 import { buildFlow, flowConfig } from "../flow.ts";
 import { REFERENCE, referencesOf } from "../groups.ts";
 import { eventNames, overviewConfig } from "../overview.ts";
@@ -64,7 +64,7 @@ type Parsed = { model: ReturnType<typeof loadModel>; modelTexts: Record<string, 
 /** The model, its scenarios and its drawing issues, as the docs are traced against them. */
 function parsed(modelFile: string, scenarioDir: string, drawingDir: string | undefined): Parsed {
   const { text: modelText, files: modelTexts } = readModelFiles(modelFile);
-  const scenarios = readdirSync(scenarioDir).filter((f) => f.endsWith(".yaml")).sort().map((f) => parseScenario(readFileSync(join(scenarioDir, f), "utf8"), f));
+  const scenarios = readdirSync(scenarioDir).filter((f) => f.endsWith(".yaml")).sort().map((f) => readScenario(join(scenarioDir, f), f));
   const issuesFile = drawingDir ? join(drawingDir, "issues.yaml") : undefined;
   const issues = issuesFile && existsSync(issuesFile)
     ? parseIssues(readFileSync(issuesFile, "utf8"), "issues.yaml", readdirSync(drawingDir!).filter((f) => f.endsWith(".yaml") && f !== "issues.yaml")).issues
@@ -219,7 +219,7 @@ export async function check(args: string[]): Promise<number> {
     console.log(issuesMarkdown(issues, titles));
     return errors.length ? 1 : 0;
   }
-  const scenarios = yamls(scenarioDir).map((f) => parseScenario(readFileSync(join(scenarioDir, f), "utf8"), f));
+  const scenarios = yamls(scenarioDir).map((f) => readScenario(join(scenarioDir, f), f));
 
   let errors = 0;
   let warnings = 0;

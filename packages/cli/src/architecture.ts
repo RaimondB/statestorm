@@ -72,7 +72,7 @@ export function sequenceCommand(args: string[]): number {
   const base = which.replace(/^.*\//, "");
   const found = names.filter((f) => f === `scenarios/${base}` || f.slice("scenarios/".length).startsWith(`${base}-`) || f.slice("scenarios/".length) === `${base}.yaml`);
   if (found.length !== 1) throw new Error(found.length ? `${which}: more than one scenario — ${found.join(", ")}` : `${which}: no such scenario in ${dir}/scenarios`);
-  const run = runScenario(m, parseScenario(files[found[0]!]!, found[0]), { kind: "fifo" });
+  const run = runScenario(m, parseScenario(files[found[0]!]!, found[0], (p) => files[`scenarios/${p}`]), { kind: "fifo" });
   const view = { open: opened(m, args), fold: !args.includes("--unfold"), ignored: args.includes("--ignored") };
   process.stdout.write(sequenceToMermaid(sequenceOf(m, run.world.log, view, run.marks)));
   return 0;

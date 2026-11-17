@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { loadModel, type Model, type Schedule } from "@statestorm/kernel";
 import { parseScenario, runScenario, type Result } from "@statestorm/scenarios";
-import { domainFromFiles, type View } from "./domain.ts";
+import { domainFromFiles, setupsOf, type View } from "./domain.ts";
 import { EXAMPLES, servedDomains, showExamples, type Example } from "./examples.ts";
 import { pickDomainFolder } from "./openFolder.ts";
 import { actionsOf, continueFrom, DEFAULT_START, machineOfKey, play, type Action } from "./session.ts";
@@ -231,7 +231,7 @@ export function App() {
   // Each scenario names the drawing it walks (MC-14); a scenario that does not parse is on none.
   const walkers = useMemo(() => (example?.scenarios ?? []).map((s) => {
     try {
-      const sc = parseScenario(s.text, s.file);
+      const sc = parseScenario(s.text, s.file, setupsOf(example));
       return { file: s.file, name: sc.name, ...(sc.drawing ? { drawing: sc.drawing } : {}), ...(sc.tags ? { tags: sc.tags } : {}) };
     }
     catch { return { file: s.file, name: "" } as { file: string; name: string; drawing?: string; tags?: string[] }; }
@@ -250,7 +250,7 @@ export function App() {
     if (!example?.docs || !model) return undefined;
     try {
       const read = docsFromFiles(example.docs);
-      const scenarios = example.scenarios.map((s) => { try { return parseScenario(s.text, `${s.file}.yaml`); } catch { return { file: `${s.file}.yaml` }; } });
+      const scenarios = example.scenarios.map((s) => { try { return parseScenario(s.text, `${s.file}.yaml`, setupsOf(example)); } catch { return { file: `${s.file}.yaml` }; } });
       const t = trace({ docs: read, model, modelTexts: { "model.yaml": modelText, ...parts }, scenarios, issues: issues.map((i) => ({ id: i.id, ...(i.why ? { why: i.why } : {}) })) });
       return docsData(read, t, model);
     } catch { return undefined; }
@@ -323,7 +323,7 @@ export function App() {
       return;
     }
     saveChoice({ example: exampleName, scenario: file });
-    const sc = parseScenario(text, file);
+    const sc = parseScenario(text, file, setupsOf(example));
     const chosen = sc.schedule ?? schedule;
     setSchedule(chosen);
     setStartedAt(sc.given.at ?? DEFAULT_START);
@@ -615,7 +615,7 @@ export function App() {
               : center === "structure"
               ? <Structure model={model} frame={frame} focus={structureFocus} onFocus={focusStructure} />
               : center === "flow"
-              ? <Flow model={model} run={run} index={index} scenarios={example?.scenarios ?? NO_SCENARIOS}
+              ? <Flow model={model} run={run} index={index} scenarios={example?.scenarios ?? NO_SCENARIOS} setups={example?.setups}
                   drawings={drawings} groups={[...groups, ...tagged]} issues={issues} select={select} onIndex={setIndex} />
               : <Statechart model={model} machine={machine} setMachine={setMachine} frame={frame}
                   log={run.world.log} prevSeq={prevSeq} selection={selection} select={selectAndFocus} />}

@@ -6,13 +6,15 @@ import { parseScenario } from "@statestorm/scenarios";
 import { buildOverview, overviewConfig, withEventsMode, type Box } from "../src/overview.ts";
 import { buildJourney, stationsOf, type Station } from "../src/journey.ts";
 import { actionsOf, play } from "../src/session.ts";
+import { fileURLToPath } from "node:url";
+import { readScenario } from "@statestorm/scenarios/files";
 
 // ADR 0024, on the lab example: a request over its route, the route's steps laid out by which follows
 // which, its own tasks end to end in a band, the samples on the side.
 const examples = new URL("../../examples/", import.meta.url);
 const lab = loadModel(readFileSync(new URL("models/lab.yaml", examples), "utf8"));
 const journeyOf = (name: string, mode?: "statuses" | "requests" | "all") => {
-  const sc = parseScenario(readFileSync(new URL(`scenarios/lab/${name}.yaml`, examples), "utf8"));
+  const sc = readScenario(fileURLToPath(new URL(`scenarios/lab/${name}.yaml`, examples)));
   const r = play(lab, actionsOf(sc), sc.schedule ?? { kind: "fifo" }, sc.given.at);
   const frame = r.frames[r.frames.length - 1]!;
   const base = overviewConfig(lab).config;

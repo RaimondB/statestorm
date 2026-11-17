@@ -2,10 +2,10 @@
  * Runs scenarios and prints the result — `test(args)` returns the exit code. A domain folder
  * (model.yaml, scenarios/) can stand for the model and its scenarios.
  */
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { readModel } from "./files.ts";
-import { describeSchedule, parseScenario, realWorldSchedules, runScenario } from "./run.ts";
+import { readModel, readScenario } from "./files.ts";
+import { describeSchedule, realWorldSchedules, runScenario } from "./run.ts";
 import { narrate } from "./narrate.ts";
 
 export function test(args: string[]): number {
@@ -36,7 +36,7 @@ export function test(args: string[]): number {
   let failed = 0;
   let runs = 0;
   for (const file of files) {
-    const scenario = parseScenario(readFileSync(file, "utf8"), file);
+    const scenario = readScenario(file);
     for (const schedule of schedules) {
       const result = runScenario(model, scenario, schedule);
       const ok = result.failures.length === 0;

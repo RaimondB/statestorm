@@ -23,6 +23,20 @@ export function readDomain(dir: string): DomainFiles {
       files[`${sub}/${f}`] = readFileSync(join(root, sub, f), "utf8");
     }
   }
+  // The shared set-ups scenarios include (ADR 0029): every .yaml in a folder below scenarios/, but
+  // the check's proposals.
+  const below = (rel: string): void => {
+    for (const e of readdirSync(join(root, rel), { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      const path = `${rel}/${e.name}`;
+      if (e.isDirectory()) below(path);
+      else if (e.name.endsWith(".yaml")) files[path] = readFileSync(join(root, path), "utf8");
+    }
+  };
+  if (existsSync(join(root, "scenarios"))) {
+    for (const e of readdirSync(join(root, "scenarios"), { withFileTypes: true })) {
+      if (e.isDirectory() && e.name !== "proposed") below(`scenarios/${e.name}`);
+    }
+  }
   // The domain's decisions (ADR 0016), for the workbench's Docs view: their sources, not the rulebook.
   const docs = join(root, "docs");
   for (const f of ["profile.yaml", "glossary.yaml", "questions.yaml"]) {

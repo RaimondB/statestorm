@@ -14,6 +14,8 @@ interface Props {
   index: number;
   /** The example's scenarios: their runs are where the arrows come from. */
   scenarios: { file: string; text: string }[];
+  /** The shared set-ups they include, by path under scenarios/ (ADR 0029). */
+  setups?: Record<string, string>;
   /** The business's drawings of the model, and the scenarios grouped by the drawing they walk. */
   drawings: Drawing[];
   groups: Group[];
@@ -55,18 +57,18 @@ const KIND: Record<string, string> = {
  * happen, an arrow from each to what the scenarios showed can follow. The run being stepped
  * through is lit on top of it.
  */
-export function Flow({ model, run, index, scenarios, drawings, groups, issues, select, onIndex }: Props) {
+export function Flow({ model, run, index, scenarios, setups, drawings, groups, issues, select, onIndex }: Props) {
   const overview = useMemo(() => overviewConfig(model).config, [model]);
   const { flow, errors } = useMemo(() => flowConfig(model), [model]);
   // Every scenario's run, read once per model: the arrows are what they showed.
   const logs = useMemo(() => new Map(scenarios.flatMap((s) => {
     try {
-      const sc = parseScenario(s.text, s.file);
+      const sc = parseScenario(s.text, s.file, (p) => setups?.[p]);
       return [[s.file, logOf(model, actionsOf(sc), { kind: "fifo" }, sc.given.at)] as const];
     } catch {
       return [];
     }
-  })), [model, scenarios]);
+  })), [model, scenarios, setups]);
 
   const [choice, setChoice] = useState<Choice>(readChoice);
   const choose = (c: Choice) => {

@@ -3,6 +3,8 @@ export interface Example {
   name: string;
   text: string;
   scenarios: { file: string; text: string }[];
+  /** The shared set-ups its scenarios include (ADR 0029), by path under scenarios/ — `given/places.yaml`. */
+  setups?: Record<string, string>;
   drawings: { file: string; text: string }[];
   issues?: string;
   /** The files `text` may include (ADR 0019), by path relative to its folder. */
@@ -22,6 +24,17 @@ export const VIEWS = ["overview", "journey", "flow", "structure", "statecharts",
 export type View = typeof VIEWS[number];
 
 const base = (path: string) => path.split("/").pop()!.replace(/\.yaml$/, "");
+
+/** How a scenario of this example reads the shared set-ups it includes (ADR 0029). */
+export const setupsOf = (example: Example | undefined) => (path: string): string | undefined => example?.setups?.[path];
+
+/** The files in folders below scenarios/, but the check's proposals: the shared set-ups (ADR 0029). */
+export function setupFiles(files: Record<string, string>, dir = "scenarios"): { setups?: Record<string, string> } {
+  const setups = Object.fromEntries(Object.entries(files)
+    .filter(([p]) => p.startsWith(`${dir}/`) && p.endsWith(".yaml") && p.slice(dir.length + 1).includes("/") && !p.startsWith(`${dir}/proposed/`))
+    .map(([p, t]) => [p.slice(dir.length + 1), t]));
+  return Object.keys(setups).length > 0 ? { setups } : {};
+}
 
 /** The files under docs/, by their path there — none: no `docs` at all. */
 export function docsOf(files: Record<string, string>): { docs?: Record<string, string> } {
@@ -45,6 +58,7 @@ export function domainFromFiles(name: string, files: Record<string, string>, wit
     name,
     text: files["model.yaml"] ?? "",
     scenarios: under("scenarios"),
+    ...setupFiles(files),
     drawings: drawn.filter((d) => d !== issues).map((d) => ({ file: `${d.file}.yaml`, text: d.text })),
     ...(issues ? { issues: issues.text } : {}),
     parts: Object.fromEntries(Object.entries(files).filter(([p]) => !/^(scenarios|drawings|docs|agendas)\//.test(p))),

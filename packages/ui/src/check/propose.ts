@@ -269,6 +269,8 @@ export function proposalYaml(p: Proposal, raw: Record<string, unknown>, drawing:
   );
   if (given.at !== undefined) lines.push(`  at: ${String(given.at)}`);
   if (given.phase !== undefined) lines.push(`  phase: ${String(given.phase)}`);
+  // Its shared set-ups, as the original names them: from the scenarios folder, where it is kept (ADR 0029).
+  if (given.include !== undefined) lines.push(`  include: ${flow(given.include as Json)}`);
   lines.push(`  send:`);
   const entry = (item: Record<string, Json>) => {
     const keys = Object.keys(item);

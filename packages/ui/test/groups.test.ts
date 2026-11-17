@@ -6,6 +6,8 @@ import { parseScenario } from "@statestorm/scenarios";
 import { assignScenarios, offDrawing, parseDrawing, tagFindings } from "../src/check/drawings.ts";
 import { layoutFlow, type FlowGraph } from "../src/flow.ts";
 import { drawingBoard, EXTRA_LANE, referencesOf, scenarioGroups, tagGroups, tagMatches } from "../src/groups.ts";
+import { fileURLToPath } from "node:url";
+import { readScenario } from "@statestorm/scenarios/files";
 
 const examples = new URL("../../examples/", import.meta.url);
 const lab = loadModel(readFileSync(new URL("models/lab.yaml", examples), "utf8"));
@@ -59,7 +61,7 @@ test("every bundled lab scenario names a drawing that exists, so each is in exac
   const drawings = readdirSync(dir).filter((f) => f.endsWith(".yaml") && f !== "issues.yaml").map((f) => parseDrawing(lab, readFileSync(new URL(f, dir), "utf8"), f));
   for (const dr of drawings) assert.deepEqual(dr.errors, [], dr.file);
   const sdir = new URL("scenarios/lab/", examples);
-  const walkers = readdirSync(sdir).filter((f) => f.endsWith(".yaml")).map((f) => ({ file: f.replace(/\.yaml$/, ""), drawing: parseScenario(readFileSync(new URL(f, sdir), "utf8"), f).drawing }));
+  const walkers = readdirSync(sdir).filter((f) => f.endsWith(".yaml")).map((f) => ({ file: f.replace(/\.yaml$/, ""), drawing: readScenario(fileURLToPath(new URL(f, sdir)), f).drawing }));
   const { errors, none } = assignScenarios(drawings, walkers);
   assert.deepEqual(errors, []);
   assert.deepEqual(none, []);

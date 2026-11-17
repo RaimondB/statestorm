@@ -5,10 +5,12 @@ import { loadModel, type Model } from "@statestorm/kernel";
 import { parseScenario } from "@statestorm/scenarios";
 import { buildOverview, byNote, overviewConfig, spoken, toneOf, withEventsMode, type Box } from "../src/overview.ts";
 import { actionsOf, play } from "../src/session.ts";
+import { fileURLToPath } from "node:url";
+import { readScenario } from "@statestorm/scenarios/files";
 
 const examples = new URL("../../examples/", import.meta.url);
 const load = (name: string) => loadModel(readFileSync(new URL(`models/${name}.yaml`, examples), "utf8"));
-const scenario = (path: string) => parseScenario(readFileSync(new URL(`scenarios/${path}`, examples), "utf8"));
+const scenario = (path: string) => readScenario(fileURLToPath(new URL(`scenarios/${path}`, examples)));
 const fifo = { kind: "fifo" } as const;
 
 function run(model: Model, path: string, atFrame?: (n: number) => number) {

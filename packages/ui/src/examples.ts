@@ -4,13 +4,15 @@
  * changes to them agreed so far in issues.yaml. A domain lives in a repo of its own and reaches the
  * site at runtime (servedDomains, Open folder…).
  */
-import { domainFromFiles, type Example, type View } from "./domain.ts";
+import { domainFromFiles, setupFiles, type Example, type View } from "./domain.ts";
 
 export type { Example };
 
 const glob = {
   models: import.meta.glob("../../examples/models/*.yaml", { query: "?raw", import: "default", eager: true }) as Record<string, string>,
   scenarios: import.meta.glob("../../examples/scenarios/*/*.yaml", { query: "?raw", import: "default", eager: true }) as Record<string, string>,
+  // The shared set-ups the scenarios include (ADR 0029): in folders below an example's scenarios.
+  setups: import.meta.glob(["../../examples/scenarios/*/*/**/*.yaml", "!../../examples/scenarios/*/proposed/**"], { query: "?raw", import: "default", eager: true }) as Record<string, string>,
   drawings: import.meta.glob("../../examples/drawings/*/*.yaml", { query: "?raw", import: "default", eager: true }) as Record<string, string>,
   // The examples' decisions (ADR 0016) — the sources the Docs view reads, not the generated rulebook.
   docs: import.meta.glob(["../../examples/docs/*/*.yaml", "../../examples/docs/*/rules/*.yaml", "../../examples/docs/*/decisions/*.md"],
@@ -77,6 +79,7 @@ export const EXAMPLES: Example[] = models
         .map((d) => ({ file: `${d.file}.yaml`, text: d.text }))
         .sort((a, b) => a.file.localeCompare(b.file)),
       ...(issues ? { issues: issues.text } : {}),
+      ...setupFiles(Object.fromEntries(Object.entries(glob.setups).map(([p, t]) => [p.replace("../../examples/", ""), t])), `scenarios/${name}`),
       ...docsOfExample(name),
       ...(planned.length > 0 ? { agendas: planned } : {}),
     };

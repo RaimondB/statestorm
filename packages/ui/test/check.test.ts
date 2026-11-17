@@ -12,6 +12,8 @@ import { contributions } from "../src/check/contribution.ts";
 import { unanswered } from "../src/check/unanswered.ts";
 import { staticChecks } from "../src/check/statics.ts";
 import { crossings } from "../src/check/roles.ts";
+import { fileURLToPath } from "node:url";
+import { readScenario, scenarioFiles } from "@statestorm/scenarios/files";
 
 const examples = new URL("../../examples/", import.meta.url);
 const lab = loadModel(readFileSync(new URL("models/lab.yaml", examples), "utf8"));
@@ -123,7 +125,7 @@ arrows:
 test("the lab's drawings import cleanly, and each is compared with its own scenarios (MC-12)", () => {
   const drawings = readdirSync(drawingDir).filter((f) => f.endsWith(".yaml") && f !== "issues.yaml").map((f) => parseDrawing(lab, readFileSync(new URL(f, drawingDir), "utf8"), f));
   assert.deepEqual(drawings.flatMap((d) => d.errors), []);
-  const parsed = readdirSync(scenarioDir).filter((f) => f.endsWith(".yaml")).sort().map((f) => parseScenario(readFileSync(new URL(f, scenarioDir), "utf8"), f));
+  const parsed = readdirSync(scenarioDir).filter((f) => f.endsWith(".yaml")).sort().map((f) => readScenario(fileURLToPath(new URL(f, scenarioDir)), f));
   assignScenarios(drawings, parsed.map((sc) => ({ file: sc.file!, drawing: sc.drawing })));
   const runs = parsed.map((sc) => ({ file: sc.file!, log: runScenario(lab, sc).world.log }));
   const graphOf = (prefixes?: string[]) => buildFlow(lab, overviewConfig(lab).config, flowConfig(lab).flow,
@@ -160,7 +162,7 @@ test("a path's scenarios are file-name prefixes, also when YAML reads them as nu
 
 test("a proposed scenario closes a gap from the closest run, and says what the model did with it (MC-11)", async () => {
   const { propose, proposalYaml } = await import("../src/check/propose.ts");
-  const scenarios = readdirSync(scenarioDir).filter((f) => f.endsWith(".yaml")).sort().map((f) => parseScenario(readFileSync(new URL(f, scenarioDir), "utf8"), f));
+  const scenarios = readdirSync(scenarioDir).filter((f) => f.endsWith(".yaml")).sort().map((f) => readScenario(fileURLToPath(new URL(f, scenarioDir)), f));
   // Received, and never queued in time: the next deadline is the step.
   const expiry = propose(lab, scenarios, "Received", "StabilityExpired", ["01"]);
   assert.ok(!("reason" in expiry));
@@ -185,7 +187,7 @@ test("a proposed scenario closes a gap from the closest run, and says what the m
   const raw = parseYaml(readFileSync(new URL(back.scenario, scenarioDir), "utf8")) as Record<string, unknown>;
   const text = proposalYaml(back, raw, "a drawing", { from: "Lost in transit", to: "Too old to run" });
   assert.match(text, /^# PROPOSED by the model check/);
-  assert.deepEqual(runScenario(lab, parseScenario(text)).failures, []);
+  assert.deepEqual(runScenario(lab, parseScenario(text, "proposed.yaml", scenarioFiles(fileURLToPath(scenarioDir)))).failures, []);
 });
 
 test("a proposal says what its steps left waiting for a person — not what the model drives itself (MC-11)", async () => {
@@ -231,7 +233,7 @@ overview: { flow: { of: [Box] } }
 test("ADR 0027 §5: the events that move what another role works, the roll-ups left out", () => {
   const dir = new URL("scenarios/lab/", examples);
   const ends = readdirSync(dir).filter((f) => f.endsWith(".yaml")).sort().map((f) => {
-    const r = runScenario(lab, parseScenario(readFileSync(new URL(f, dir), "utf8"), f), { kind: "fifo" });
+    const r = runScenario(lab, readScenario(fileURLToPath(new URL(f, dir)), f), { kind: "fifo" });
     return { file: f, world: r.world };
   });
   const found = crossings(lab, ends);

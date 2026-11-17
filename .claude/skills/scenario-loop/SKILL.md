@@ -30,7 +30,9 @@ loop is write → run under every schedule → read the trace → break the rule
 - **`why:`** under `tags:` lists the rules it shows (`why: [R12, R14]`), so the check can say
   which agreed rule no scenario shows (ADR 0016). A **header comment** says what it shows, in
   words.
-- `given:` plans; `when:` steps in `phase:`s; assert **mid-run, at the moment that matters**
+- `given:` plans — master data most scenarios share (places, parties, their settings) once, in a
+  set-up below `scenarios/` that each includes (`given: include: [given/places.yaml]`, ADR 0029);
+  `when:` steps in `phase:`s; assert **mid-run, at the moment that matters**
   (`expect_state`, `expect_in_state`, `data`), not only at the end — "paid, not yet
   shipped" is a step of its own.
 - Assert on what the business cares about (states, what other systems are told, what the customer hears) and on

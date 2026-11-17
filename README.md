@@ -215,6 +215,12 @@ through time; what they change stays in their browser. The bundled examples are 
   play it later. The overview marks an event drawn under a box of another role as *from elsewhere*
   (outlined, `↗ <role>`, a switch for only those); the check's **Roles** section lists every event that
   moved what another role works, with its scenarios.
+- **Reached by id** (ADR 0028): a command to an abstract type reaches the one instance, of any concrete
+  subtype, with that id — `Site#${event.site}.Describe` reaches `Clinic#CLIN2` in the `lab` example, so a
+  sender that knows only the id need not know the kind. No instance with the id: unhandled; two: an error.
+- **A shared set-up** (ADR 0029): `given: include: [given/sites.yaml]` starts a scenario with the sends of
+  a file in a folder below `scenarios/`, written once — the master data most scenarios need. A set-up holds
+  `send:` and may include others; its sends come before the scenario's own.
 - **The docs travel with it:** the domain's `docs/` sources — rules, glossary, questions, profile, the
   sessions' logs (not the generated rulebook) — go into the share, served site and *Open folder…* alike,
   for the **Docs** view (ADR 0016 §9): every topic and its rules, each rule linked to what cites it — a

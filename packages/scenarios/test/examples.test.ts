@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadModel } from "@statestorm/kernel";
 import { describeSchedule, parseScenario, realWorldSchedules, runScenario } from "../src/run.ts";
+import { readScenario } from "../src/files.ts";
 
 // Each model under examples/models/<name>.yaml owns the scenarios in examples/scenarios/<name>/.
 const root = fileURLToPath(new URL("../../examples/", import.meta.url));
@@ -24,7 +25,7 @@ for (const { name, modelFile, dir } of all) {
   // Every scenario is run under `fifo` and then under the schedules the real infrastructure
   // can produce: reordering and redelivery (ADR 0006).
   for (const file of files) {
-    const scenario = parseScenario(readFileSync(join(dir, file), "utf8"), file);
+    const scenario = readScenario(join(dir, file), file);
     for (const schedule of realWorldSchedules()) {
       test(`${name}: ${scenario.name} [${describeSchedule(schedule)}]`, () => {
         const result = runScenario(model, scenario, schedule);
@@ -34,7 +35,7 @@ for (const { name, modelFile, dir } of all) {
   }
 
   test(`${name}: a run is deterministic: the same scenario twice gives the same trace (R15)`, () => {
-    const scenario = parseScenario(readFileSync(join(dir, files[0]!), "utf8"), files[0]);
+    const scenario = readScenario(join(dir, files[0]!), files[0]);
     const a = runScenario(model, scenario).world.log;
     const b = runScenario(model, scenario).world.log;
     assert.equal(JSON.stringify(a), JSON.stringify(b));
