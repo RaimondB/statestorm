@@ -6,6 +6,7 @@ drawing: sample-to-result
 tags: [deviation, haemolysed]
 why: [R2, R5, R6, R8, R16]
 given:
+  include: [given/sites.yaml]
   at: 2026-03-02T08:00:00Z
   phase: Planning
   send:

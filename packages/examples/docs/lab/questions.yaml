@@ -17,3 +17,11 @@ questions:
     answer: from when its run is expected; on the analyser's queue it is kept cool and no longer ages
     answered: { session: 2, date: 2026-03-09 }
     answeredBy: [R10]
+  - id: Q-3
+    question: What is a site, and can an analysis be planned at any of them?
+    leaning: a clinic or a lab; only a lab runs an analysis, and one planned elsewhere is flagged
+    status: answered
+    asked: { session: 2, date: 2026-03-09 }
+    answer: agreed, with the leaning — the planner is told at once
+    answered: { session: 3, date: 2026-03-16 }
+    answeredBy: [R17]

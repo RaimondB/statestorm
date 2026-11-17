@@ -2,7 +2,7 @@
 
 # Rulebook
 
-16 rules in 6 topics: 13 agreed, 1 to confirm, 1 deferred, 1 superseded. [1 open question](questions.md). The terms are in the [glossary](glossary.md).
+17 rules in 6 topics: 14 agreed, 1 to confirm, 1 deferred, 1 superseded. [1 open question](questions.md). The terms are in the [glossary](glossary.md).
 
 ## [Requests and routes](requests.md)
 
@@ -42,6 +42,7 @@
 | [R10](analysis.md#R10) | agreed | Stability counts from when the run is expected |
 | [R11](analysis.md#R11) | superseded | Stability counts from collection |
 | [R12](analysis.md#R12) | deferred | How a released result reaches the doctor |
+| [R17](analysis.md#R17) | agreed | An analysis runs at a lab; planned at a clinic, the planner is told |
 
 ## [What the patient is told](patient.md)
 

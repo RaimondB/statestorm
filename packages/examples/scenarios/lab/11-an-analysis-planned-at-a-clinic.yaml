@@ -1,0 +1,24 @@
+# The analysis is planned at CLIN2 by mistake. The route names the site by its id only, and the
+# analysis asks it what it is without knowing whether it is a clinic or a lab — the question reaches
+# the clinic (ADR 0028). A clinic runs no analysis, so the planner is told at once (R17). The sites
+# come from the shared set-up every lab scenario includes (ADR 0029).
+scenario: an analysis planned at a clinic — the planner is told at once
+drawing: sample-to-result
+tags: [deviation, misplanned]
+why: [R17]
+given:
+  include: [given/sites.yaml]
+  at: 2026-03-02T08:00:00Z
+  phase: Planning
+  send:
+    - Request#R11.Create: { patient: P11, samples: [S14] }
+    - Route#R11-CLIN2.Plan: { request: R11, lab: CLIN2, tubes: [ { sample: S14, tube: serum } ] }
+    - SiteVisit#R11-CLIN1.Plan: { route: R11-CLIN2, site: CLIN1, samples: [S14] }
+    - Analysis#R11-CHEM.Plan: { route: R11-CLIN2, site: CLIN2, department: chemistry, stability: 8h, samples: [S14] }
+when:
+  - expect_state: { Analysis#R11-CHEM: created }
+then:
+  - emitted: [SiteDescribed, AnalysisMisplanned]
+  - emitted_count: { AnalysisMisplanned: 1 }
+  - data:
+      Analysis#R11-CHEM: { site: CLIN2 }

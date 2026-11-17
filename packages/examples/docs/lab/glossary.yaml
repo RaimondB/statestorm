@@ -9,6 +9,15 @@ terms:
   - term: Step
     definition: One part of a route — a site the samples pass, a transfer between two sites, or an analysis.
     model: [Step, SiteVisit, Analysis]
+  - term: Site
+    definition: A place the samples pass, registered once — a clinic or a lab (R17).
+    model: [Site]
+  - term: Clinic
+    definition: A site that draws samples; it runs no analysis (R17).
+    model: [Clinic]
+  - term: Lab
+    definition: A site that analyses samples, in its departments (R17).
+    model: [Lab]
   - term: Task
     definition: A part of a step at one stage — start, middle or final; the latest stage reached decides whether the step failed.
     model: [Task]

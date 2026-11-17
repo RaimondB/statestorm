@@ -4,6 +4,12 @@
 
 [All topics](index.md)
 
+### Clinic
+
+A site that draws samples; it runs no analysis (R17).
+
+- **In the model:** `Clinic`
+
 ### Deviation
 
 Something reported about a sample — haemolysed, missing — that a person resolves or confirms.
@@ -22,6 +28,12 @@ The red cells of the sample have burst; the result would be wrong.
 One sample on one task, where what a scan means to that task is decided.
 
 - **In the model:** `Handling`
+
+### Lab
+
+A site that analyses samples, in its departments (R17).
+
+- **In the model:** `Lab`
 
 ### Patient view
 
@@ -54,6 +66,12 @@ What is drawn from the patient and scanned on its way; one tube.
 
 - **In the model:** `Sample`
 - **Not:** *specimen* — the lab's forms say sample; one word for one thing
+
+### Site
+
+A place the samples pass, registered once — a clinic or a lab (R17).
+
+- **In the model:** `Site`
 
 ### Stability
 

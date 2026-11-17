@@ -6,12 +6,14 @@ import { createWorld, send } from "../src/engine.ts";
 import { PERSON } from "../src/systems.ts";
 import { lifelineNamed, lifelinesOf, openAt, sequenceOf, sequenceToMermaid, type Sequence, type SequenceItem, type SequenceView } from "../src/sequence.ts";
 import { parseScenario, runScenario } from "../../scenarios/src/index.ts";
+import { fileURLToPath } from "node:url";
+import { readScenario } from "../../scenarios/src/files.ts";
 
 // ADR 0022, on the lab example (ADR 0018, ADR 0020): one system of its own in three sub-systems, a
 // vendor's patient portal that runs what the model specifies, a scanner vendor in three parts, two domains.
 const lab = loadModel(readFileSync(new URL("../../examples/models/lab.yaml", import.meta.url), "utf8"));
 const run = (name: string) =>
-  runScenario(lab, parseScenario(readFileSync(new URL(`../../examples/scenarios/lab/${name}.yaml`, import.meta.url), "utf8")), { kind: "fifo" });
+  runScenario(lab, readScenario(fileURLToPath(new URL(`../../examples/scenarios/lab/${name}.yaml`, import.meta.url))), { kind: "fifo" });
 const lines = lifelinesOf(lab);
 const at = (depth: Parameters<typeof openAt>[1], more: string[] = []): SequenceView => ({ open: [...openAt(lines, depth), ...more] });
 const sequence = (name: string, view: SequenceView) => { const r = run(name); return sequenceOf(lab, r.world.log, view, r.marks); };
@@ -50,7 +52,7 @@ test("a run in causal order: each arrow, the steps it set off inside, then what 
   assert.ok(planning?.kind === "frame" && planning.frame === "section" && planning.label === "Planning");
   assert.deepEqual(said(planning.items), ["{setup set-up, folded}"]);
   const setup = planning.items[0];
-  assert.ok(setup?.kind === "frame" && setup.messages === 7);
+  assert.ok(setup?.kind === "frame" && setup.messages === 12);   // the sites, included (ADR 0029), then the plan
   assert.ok(toTheLab?.kind === "frame" && toTheLab.label === "To the lab");
   assert.deepEqual(said(toTheLab.items).slice(0, 4), [
     "system:Scanners → system:Lab: Sample.Scan",
@@ -63,10 +65,10 @@ test("a run in causal order: each arrow, the steps it set off inside, then what 
   assert.ok(!messages(s).some((m) => m.from === m.to), "nothing inside a lifeline is an arrow");
 
   const open = sequence("02-haemolysed-at-the-lab", { ...at("system"), toggled: ["setup"] });
-  assert.deepEqual(said(messages(open)).slice(0, 1), ["system:Hospital information system → system:Lab: Request.Create"]);
+  assert.ok(said(messages(open)).includes("system:Hospital information system → system:Lab: Request.Create"));
   const mermaid = sequenceToMermaid(s);
   assert.match(mermaid, /box transparent Diagnostics\n  participant system_Lab as Lab\n  participant system_Patient_portal as Patient portal\n  end/);
-  assert.match(mermaid, /Note over [^:]+: ▸ set-up · 7 messages, folded/);
+  assert.match(mermaid, /Note over [^:]+: ▸ set-up · 12 messages, folded/);
 });
 
 test("one lifeline opened, the others whole: the Lab's sub-systems talk, the vendors stay one lifeline", () => {

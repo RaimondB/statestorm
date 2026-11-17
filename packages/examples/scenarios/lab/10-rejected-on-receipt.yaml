@@ -6,6 +6,7 @@ drawing: sample-to-result
 tags: [deviation, rejected]
 why: [R9]
 given:
+  include: [given/sites.yaml]
   at: 2026-03-02T08:00:00Z
   phase: Planning
   send:

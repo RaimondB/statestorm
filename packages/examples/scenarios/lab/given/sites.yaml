@@ -1,0 +1,8 @@
+# The sites every lab scenario starts from, registered once and included by each (ADR 0029): the
+# clinics and the ward that draw samples, and the labs that analyse them (R17).
+send:
+  - Clinic#CLIN1.Register: { name: north clinic }
+  - Clinic#CLIN2.Register: { name: south clinic }
+  - Clinic#W3.Register: { name: ward 3 }
+  - Lab#LAB1.Register: { name: central lab }
+  - Lab#REF1.Register: { name: reference lab }

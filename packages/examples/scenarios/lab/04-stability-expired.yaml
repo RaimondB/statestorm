@@ -6,6 +6,7 @@ drawing: sample-to-result
 tags: [deviation, expired]
 why: [R2, R3, R10, R16, TP-4]
 given:
+  include: [given/sites.yaml]
   at: 2026-03-02T08:00:00Z
   phase: Planning
   send:

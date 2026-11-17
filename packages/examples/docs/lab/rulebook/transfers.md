@@ -4,13 +4,13 @@
 
 > the sites the samples pass, and moving them between two sites
 
-**Types:** `SiteVisit`, `SiteTask`, `SiteHandling`, `Transfer`, `CourierRun`, `TubeRun`, `TransferTask`, `TransferHandling` (packages Sites, Transfers)
+**Types:** `Site`, `Clinic`, `Lab`, `SiteVisit`, `SiteTask`, `SiteHandling`, `Transfer`, `CourierRun`, `TubeRun`, `TransferTask`, `TransferHandling` (packages Sites, Transfers)
 
-**Commands in:** Collected, Delivered, DeviationPending, DeviationResolved, Expect, Haemolysed, Missing, Packed, PickedUp, Plan, Received, Rejected, SampleStopped
+**Commands in:** Collected, Delivered, Describe, DeviationPending, DeviationResolved, Expect, Haemolysed, Missing, Packed, PickedUp, Plan, Received, Register, Rejected, SampleStopped
 
-**Events out:** SampleStopped
+**Events out:** SampleStopped, SiteDescribed
 
-**Policies reacting:** sample_stopped (on SampleStopped)
+**Policies reacting:** analysis_site_described (on SiteDescribed); sample_stopped (on SampleStopped)
 
 [All topics](index.md)
 

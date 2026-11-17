@@ -6,11 +6,11 @@
 
 **Types:** `Analysis`, `AnalysisTask`, `AnalysisHandling` (package Analysis)
 
-**Commands in:** Analysed, DeviationPending, DeviationResolved, Expect, Haemolysed, Missing, Plan, Queued, Received, Rejected, Released, SampleStopped
+**Commands in:** Analysed, DeviationPending, DeviationResolved, Expect, Haemolysed, Missing, Plan, Queued, Received, Rejected, Released, SampleStopped, SiteDescribed
 
-**Events out:** SampleStopped, StabilityExpired
+**Events out:** AnalysisMisplanned, AnalysisPlanned, SampleStopped, StabilityExpired
 
-**Policies reacting:** sample_stopped (on SampleStopped)
+**Policies reacting:** ask_analysis_site (on AnalysisPlanned); sample_stopped (on SampleStopped)
 
 [All topics](index.md)
 
@@ -45,3 +45,13 @@ A sample's stability is counted from when it was collected.
 **release:** 2
 
 The report task ends at Released. Sending the result to the doctor's system is left out until the lab's interface is chosen.
+
+<a id="R17"></a>
+### R17 — An analysis runs at a lab; planned at a clinic, the planner is told
+
+`agreed` · behavioural · decided in session 3, 2026-03-16, answering [Q-3](questions.md#Q-3)
+
+A site is a clinic or a lab, registered once. A step names its site by the id alone, so an analysis asks its site what it is. Only a lab runs an analysis: one planned at a clinic is flagged to the planner at once, before any sample arrives.
+
+- **Model:** `Site`, `Analysis.created on SiteDescribed#clinic`, `Analysis.in_progress on SiteDescribed#clinic`, `ask_analysis_site`
+- **Shown by:** 11-an-analysis-planned-at-a-clinic

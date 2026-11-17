@@ -95,7 +95,7 @@ test("packages hold what they list and the entities of their aggregates — so o
   const pkg = (n: string) => s.packages.find((p) => p.name === n)!.types.sort();
   assert.deepEqual(pkg("Steps"), ["Handling", "Step", "Task"], "the generic component");
   assert.deepEqual(pkg("Transfers"), ["CourierRun", "Transfer", "TransferHandling", "TransferTask", "TubeRun"], "the shared tasks come with the type both runs are");
-  assert.deepEqual(pkg("Sites"), ["SiteHandling", "SiteTask", "SiteVisit"]);
+  assert.deepEqual(pkg("Sites"), ["Clinic", "Lab", "Site", "SiteHandling", "SiteTask", "SiteVisit"]);
   assert.deepEqual(pkg("Analysis"), ["Analysis", "AnalysisHandling", "AnalysisTask"]);
   assert.deepEqual(pkg("Requests"), ["Instruction", "Link", "Request", "Route", "RouteHandling", "RouteTask", "TubeRow"]);
   const route = s.types.find((t) => t.name === "Route")!;

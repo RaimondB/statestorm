@@ -30,3 +30,12 @@ rules:
     text: >-
       The report task ends at Released. Sending the result to the doctor's system is left out until
       the lab's interface is chosen.
+  - id: R17
+    title: An analysis runs at a lab; planned at a clinic, the planner is told
+    kind: behavioural
+    status: agreed
+    decided: { session: 3, date: 2026-03-16, questions: [Q-3] }
+    text: >-
+      A site is a clinic or a lab, registered once. A step names its site by the id alone, so an
+      analysis asks its site what it is. Only a lab runs an analysis: one planned at a clinic is
+      flagged to the planner at once, before any sample arrives.

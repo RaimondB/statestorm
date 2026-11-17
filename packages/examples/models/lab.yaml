@@ -30,8 +30,8 @@ packages:
     why: [R4]
     types: [Request, Route, TubeRow, Instruction]
   Sites:
-    note: a site the samples pass — the clinic that draws them, or a lab they are sent on from
-    types: [SiteVisit]
+    note: a site the samples pass — the clinic that draws them, or a lab they are sent on from; and the site itself, a clinic or a lab
+    types: [SiteVisit, Site, Clinic, Lab]
   Transfers:
     note: moving samples between sites — by courier, or through the hospital's tube system; both pick up and deliver the same way
     types: [Transfer, CourierRun, TubeRun]
@@ -110,7 +110,7 @@ overview:
   top: [PatientView]                       # what the patient is told, first and always
   band: [Route.tasks]                      # the route's own tasks, end to end
   hide: [Handling]
-  omit: [Deviation, Link]                  # a deviation is the substatus of the status that reported it; a link is plan
+  omit: [Deviation, Link, Site]            # a deviation is the substatus of the status that reported it; a link is plan; a site is master data
   side: [Sample]
   attributes: [reason]                     # why a deviation was reported, under the sample it is about
   follows: { type: Link, before: before, after: after }
@@ -405,6 +405,37 @@ aggregates:
 
   # ================================================================== sites
 
+  # The site itself: a clinic or a lab, registered once. Who plans a step names its site by id only,
+  # and asks it without knowing which kind it is — the command to Site reaches the one instance with
+  # the id (ADR 0028).
+  Site:
+    abstract: true
+    why: [R17]
+    data:
+      name: { type: string }
+      kind: { type: string }
+    initial: known
+    states:
+      known:
+        on:
+          Describe:
+            takes: { analysis: string }
+            emit: [ SiteDescribed: { analysis: "${command.analysis}", site: "${id}", kind: "${kind}" } ]
+  Clinic:
+    extends: Site
+    creators: [Register]
+    states:
+      known:
+        on:
+          Register: { takes: { name: string }, assign: { name: command.name, kind: "'clinic'" } }
+  Lab:
+    extends: Site
+    creators: [Register]
+    states:
+      known:
+        on:
+          Register: { takes: { name: string }, assign: { name: command.name, kind: "'lab'" } }
+
   # A site the samples pass: the clinic that draws them (inbound: collected), or a lab they are
   # received at and sent on from. Outbound ends when they leave — picked up, or, where the clinic
   # is next to the lab, delivered there by hand.
@@ -524,6 +555,7 @@ aggregates:
           Plan:
             takes: { route: string, site: string, department: string, stability: string, samples: [string] }
             assign: { site: command.site, department: command.department }
+            emit: [ AnalysisPlanned: { analysis: "${id}", site: "${command.site}" } ]
             send:
               - to: "AnalysisTask#${id}-receive.Plan"
                 with: { step: "${type}#${id}", kind: receive, stage: start, site: "${command.site}", stability: "", samples: "${command.samples}" }
@@ -531,6 +563,24 @@ aggregates:
                 with: { step: "${type}#${id}", kind: run, stage: middle, site: "${command.site}", stability: "${command.stability}", samples: "${command.samples}" }
               - to: "AnalysisTask#${id}-report.Plan"
                 with: { step: "${type}#${id}", kind: report, stage: final, site: "${command.site}", stability: "", samples: "${command.samples}" }
+          # Planned at a site that is no lab, the analysis cannot run: the planner is told at once (R17).
+          SiteDescribed#clinic:
+            why: [R17]
+            guard: command.kind == 'clinic'
+            idempotency: "'misplanned'"
+            takes: { site: string, kind: string }
+            emit: [ AnalysisMisplanned: { analysis: "${id}", site: "${command.site}" } ]
+          SiteDescribed: { takes: { site: string, kind: string } }
+      in_progress:
+        on:
+          # The answer is not ordered with the scans (ADR 0006): heard after the work started too.
+          SiteDescribed#clinic:
+            why: [R17]
+            guard: command.kind == 'clinic'
+            idempotency: "'misplanned'"
+            takes: { site: string, kind: string }
+            emit: [ AnalysisMisplanned: { analysis: "${id}", site: "${command.site}" } ]
+          SiteDescribed: { takes: { site: string, kind: string } }
 
   AnalysisTask:
     extends: Task
@@ -736,6 +786,18 @@ aggregates:
 
 policies:
 
+  # An analysis asks its site what it is — by the id alone: a clinic or a lab (ADR 0028, R17).
+  ask_analysis_site:
+    why: [R17]
+    on: AnalysisPlanned
+    command: "Site#${event.site}.Describe"
+    with: { analysis: "${event.analysis}" }
+
+  analysis_site_described:
+    on: SiteDescribed
+    command: "Analysis#${event.analysis}.SiteDescribed"
+    with: { site: "${event.site}", kind: "${event.kind}" }
+
   register_samples:
     on: RequestCreated
     for_each: event.samples
@@ -819,3 +881,4 @@ coverage:
   lives_on:
     Sample: the tube — tracked from its first scan to its last
     Link: a link in the plan — which step follows which — not a process
+    Site: a clinic or a lab, registered once — a place, not a process (R17)

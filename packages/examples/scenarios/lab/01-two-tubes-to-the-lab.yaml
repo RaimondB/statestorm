@@ -6,6 +6,7 @@ drawing: sample-to-result
 tags: [happy]
 why: [R1, R4, R5, R7, R13, R15]
 given:
+  include: [given/sites.yaml]
   at: 2026-03-02T08:00:00Z
   phase: Planning
   send:

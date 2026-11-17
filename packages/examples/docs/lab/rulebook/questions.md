@@ -24,3 +24,11 @@
 - **Asked:** session 1, 2026-03-02
 - **Answer:** from when its run is expected; on the analyser's queue it is kept cool and no longer ages
 - **Recorded in:** [R10](analysis.md#R10)
+
+<a id="Q-3"></a>
+### Q-3 — What is a site, and can an analysis be planned at any of them?
+
+- **Leaning:** a clinic or a lab; only a lab runs an analysis, and one planned elsewhere is flagged
+- **Asked:** session 2, 2026-03-09
+- **Answer:** agreed, with the leaning — the planner is told at once
+- **Recorded in:** [R17](analysis.md#R17)
