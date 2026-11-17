@@ -1091,68 +1091,93 @@ function deliverInside(world: World, aggregate: string, inside: { key: string; n
   }
 }
 
+/** The concrete types that extend `type`, at any distance (ADR 0008). */
+function concreteSubtypes(world: World, type: string): string[] {
+  return Object.values(world.model.aggregates).filter((m) => !m.abstract && m.ancestors.includes(type)).map((m) => m.name);
+}
+
+/** The concrete subtypes of `type` that have an instance with this id — one, unless ids collide (ADR 0028). */
+function reach(world: World, type: string, id: string): string[] {
+  return concreteSubtypes(world, type).filter((ty) => world.aggregates[`${ty}#${id}`] !== undefined);
+}
+
 function dispatch(world: World, input: Input): void {
   switch (input.kind) {
     case "command": {
-      const key = `${input.type}#${input.id}`;
-      const machine = world.model.aggregates[input.type];
+      // ADR 0028: a command to an abstract type reaches the one instance, of any concrete subtype,
+      // that has the id — whoever sends it need not know which kind of thing it is.
+      const reached = world.model.aggregates[input.type]?.abstract ? reach(world, input.type, input.id) : undefined;
+      const cmd = reached?.length === 1 ? { ...input, type: reached[0]! } : input;
+      const key = `${cmd.type}#${cmd.id}`;
+      const machine = world.model.aggregates[cmd.type];
       const seq = write(world, {
-        kind: "command", instance: key, name: input.name, payload: input.payload,
-        cause: input.cause, redelivery: input.redelivery,
+        kind: "command", instance: key, name: cmd.name, payload: cmd.payload,
+        cause: cmd.cause, redelivery: cmd.redelivery,
       });
       if (!machine) {
-        finding(world, "error", `there is no aggregate called \`${input.type}\``, seq, key);
+        finding(world, "error", `there is no aggregate called \`${cmd.type}\``, seq, key);
         return;
       }
       if (machine.abstract) {
-        finding(world, "error",
-          `\`${input.type}\` is abstract and has no instances — address one of its subclasses (ADR 0008)`, seq, key);
+        const subtypes = concreteSubtypes(world, cmd.type);
+        if (reached && reached.length > 1) {
+          finding(world, "error",
+            `${reached.map((ty) => `${ty}#${cmd.id}`).join(" and ")} share the id \`${cmd.id}\`, so \`${cmd.type}#${cmd.id}\` could be either — address one by its own type (ADR 0028)`, seq, key);
+        } else if (machine.creators.includes(cmd.name) || subtypes.length === 0) {
+          finding(world, "error",
+            `\`${cmd.type}\` is abstract and has no instances — create one of its subclasses (ADR 0008)`, seq, key);
+        } else {
+          write(world, {
+            kind: "unhandled", instance: key, name: cmd.name, cause: seq,
+            reason: `no ${subtypes.join(" or ")} has the id \`${cmd.id}\` — an abstract type is reached, never created (ADR 0028)`,
+          });
+        }
         return;
       }
-      if (machine.role === "entity" && !input.inner) {
+      if (machine.role === "entity" && !cmd.inner) {
         // ADR 0012 §4: an entity is reached through its aggregate, never addressed from outside.
         const agg = world.aggregates[key] ? aggregateOf(world, key) : undefined;
         finding(world, "error",
           `${key} is an entity${agg ? ` of ${agg}` : ""} — commands go to its aggregate, which sends them on (ADR 0012)`, seq, key);
         return;
       }
-      if (input.inside) {
-        deliverInside(world, key, input.inside, seq);
+      if (cmd.inside) {
+        deliverInside(world, key, cmd.inside, seq);
         return;
       }
       let inst = world.aggregates[key];
       if (!inst) {
-        if (!machine.creators.includes(input.name)) {
+        if (!machine.creators.includes(cmd.name)) {
           write(world, {
-            kind: "unhandled", instance: key, name: input.name, cause: seq,
-            reason: `no such instance, and \`${input.name}\` is not one of ${machine.name}'s creators (${machine.creators.join(", ")})`,
+            kind: "unhandled", instance: key, name: cmd.name, cause: seq,
+            reason: `no such instance, and \`${cmd.name}\` is not one of ${machine.name}'s creators (${machine.creators.join(", ")})`,
           });
           return;
         }
         // ADR 0021: a creating command that no rule accepts creates nothing. It is tried first on
         // the instance it would make — its initial state, its defaults, its references — unsaved.
-        const trial = provisional(world, machine, input.id, input.payload);
-        const t = resolve(world, trial, machine, (s) => s.on[input.name] ?? [], scopeFor(world, trial, machine, { command: input.payload }));
+        const trial = provisional(world, machine, cmd.id, cmd.payload);
+        const t = resolve(world, trial, machine, (s) => s.on[cmd.name] ?? [], scopeFor(world, trial, machine, { command: cmd.payload }));
         if (!t.transition) {
           if (t.candidates === 0) {
             write(world, {
-              kind: "unhandled", instance: key, name: input.name, cause: seq,
+              kind: "unhandled", instance: key, name: cmd.name, cause: seq,
               reason: `nothing in ${refOf(activePath(trial.config))} or its ancestors handles it — nothing was created`,
             });
           } else {
-            write(world, { kind: "rejected", instance: key, name: input.name, chain: t.chain, cause: seq });
+            write(world, { kind: "rejected", instance: key, name: cmd.name, chain: t.chain, cause: seq });
           }
           return;
         }
-        inst = createAggregate(world, machine, input.id, input, seq);
+        inst = createAggregate(world, machine, cmd.id, cmd, seq);
       }
-      const scope = scopeFor(world, inst, machine, { command: input.payload });
-      const r = resolve(world, inst, machine, (s) => s.on[input.name] ?? [], scope);
-      if (!r.transition && input.broadcast) {
+      const scope = scopeFor(world, inst, machine, { command: cmd.payload });
+      const r = resolve(world, inst, machine, (s) => s.on[cmd.name] ?? [], scope);
+      if (!r.transition && cmd.broadcast) {
         // A broadcast reaches everyone who points at the raiser; most have no answer, and
         // that is the expected case — recorded, but not as a fault (ADR 0007 §5).
         write(world, {
-          kind: "ignored", instance: key, name: input.name, cause: seq,
+          kind: "ignored", instance: key, name: cmd.name, cause: seq,
           reason: r.candidates === 0
             ? `nothing in ${refOf(activePath(inst.config))} handles it`
             : "no rule's guard held",
@@ -1163,16 +1188,16 @@ function dispatch(world: World, input: Input): void {
       if (!r.transition) {
         if (r.candidates === 0) {
           write(world, {
-            kind: "unhandled", instance: key, name: input.name, cause: seq,
+            kind: "unhandled", instance: key, name: cmd.name, cause: seq,
             reason: `nothing in ${refOf(activePath(inst.config))} or its ancestors handles it`,
           });
         } else {
-          write(world, { kind: "rejected", instance: key, name: input.name, chain: r.chain, cause: seq });
+          write(world, { kind: "rejected", instance: key, name: cmd.name, chain: r.chain, cause: seq });
         }
         return;
       }
-      if (alreadyApplied(world, inst, r.transition, scope, input.name, seq)) return;
-      applyTransition(world, inst, machine, r.transition, scope, seq, input.name);
+      if (alreadyApplied(world, inst, r.transition, scope, cmd.name, seq)) return;
+      applyTransition(world, inst, machine, r.transition, scope, seq, cmd.name);
       return;
     }
 

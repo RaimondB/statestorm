@@ -20,7 +20,9 @@ keep a model honest under at-least-once, unordered delivery.
 - A **status the business names** is an event, raised where the fact happens; its *meaning* is
   given by whatever handles it (the same event completes one step and starts another).
 - An **abstract type** carries the lifecycle and the roll-up once; subtypes refine it — they add
-  substates and rules, never states beside the inherited ones.
+  substates and rules, never states beside the inherited ones. A sender that knows only an id
+  addresses the abstract type (`Site#${event.site}.Describe`): it reaches whichever subtype has the
+  id (ADR 0028).
 - **Packages** group what belongs together; an entity sits with the aggregate that creates it.
 - **Systems** (ADR 0018, ADR 0020) say where packages run: a package in one sub-system of one system;
   an aggregate's entities in its sub-system — if a type's owners would run in two systems, that is a
