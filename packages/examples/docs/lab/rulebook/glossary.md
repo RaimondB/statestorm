@@ -10,6 +10,12 @@ A site that draws samples; it runs no analysis (R17).
 
 - **In the model:** `Clinic`
 
+### Cool box
+
+The samples of several requests packed together at a clinic for one lane, a slot per sample.
+
+- **In the model:** `CoolBox`, `BoxSlot`
+
 ### Deviation
 
 Something reported about a sample — haemolysed, missing — that a person resolves or confirms.
@@ -96,3 +102,9 @@ A part of a step at one stage — start, middle or final; the latest stage reach
 Moving samples between two sites — by courier, or through the hospital's pneumatic tube.
 
 - **In the model:** `Transfer`, `CourierRun`, `TubeRun`
+
+### Van run
+
+A van booked to the cool boxes it takes from a clinic to a lab.
+
+- **In the model:** `VanRun`

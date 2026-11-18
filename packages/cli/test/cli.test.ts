@@ -83,7 +83,7 @@ test("statestorm docs writes the rulebook; check --docs traces the docs alone, a
   assert.match(d.stdout, /none changed/, "the example's rulebook is up to date");
   const c = run("check", dir, "--docs");
   assert.equal(c.status, 0, c.stdout + c.stderr);
-  assert.match(c.stdout, /17 rules in 6 topics/);
+  assert.match(c.stdout, /20 rules in 7 topics/);
   assert.doesNotMatch(c.stdout, /Coverage/, "no runs");
   writeFileSync(join(dir, "docs/rules/patient.yaml"), readFileSync(join(dir, "docs/rules/patient.yaml"), "utf8").replace("A repeat is told once.", "A repeat is told twice."));
   const stale = run("check", dir, "--docs");
@@ -100,7 +100,7 @@ test("statestorm test and check run on a domain folder, and say how to call them
   const run = (...args: string[]) => spawnSync(process.execPath, [cli, ...args], { encoding: "utf8" });
   const t = run("test", dir);
   assert.equal(t.status, 0, t.stdout + t.stderr);
-  assert.match(t.stdout, /11\/11 runs passed/);
+  assert.match(t.stdout, /12\/12 runs passed/);
   const c = run("check", dir);
   assert.equal(c.status, 0, c.stdout + c.stderr);
   assert.match(c.stdout, /0 errors/);
@@ -259,7 +259,7 @@ test("the git pre-commit hook refuses a commit while the docs do not check (ADR 
 test("statestorm rules asks the docs: the index, one id, a topic, what is open (ADR 0016 §11)", () => {
   const dir = labDomain();
   const rules = (...args: string[]) => spawnSync(process.execPath, [cli, "rules", dir, ...args], { encoding: "utf8" });
-  assert.match(rules().stdout, /^17 rules in 6 topics: 14 agreed, 1 to confirm, 1 deferred, 1 superseded · 1 open question/);
+  assert.match(rules().stdout, /^20 rules in 7 topics: 17 agreed, 1 to confirm, 1 deferred, 1 superseded · 1 open question/);
   const r10 = rules("R10");
   assert.match(r10.stdout, /^R10 — Stability counts from when the run is expected\nagreed · behavioural · topic analysis · decided in session 2, 2026-03-09, answering Q-2 · supersedes R11\nrelease: 1/);
   assert.match(r10.stdout, /scenarios: {2}04-stability-expired/);

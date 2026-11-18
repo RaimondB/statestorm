@@ -1,0 +1,33 @@
+# yaml-language-server: $schema=../.schemas/rules.schema.json
+title: Cool boxes and van runs
+canvas:
+  purpose: the samples of several requests packed together for one lane, and the van that takes them
+  packages: [Cool boxes]
+rules:
+  - id: R18
+    title: The samples of several requests going the same way travel in one cool box
+    kind: definitional
+    status: agreed
+    decided: { session: 4, date: 2026-03-23 }
+    text: >-
+      A cool box is packed at a clinic for one lane — from that clinic to one lab — with the samples of
+      any requests going that way, a slot per sample. It is an aggregate of its own: packed before any
+      van is known.
+  - id: R19
+    title: A van run is booked to its boxes later; its arrival is theirs
+    kind: behavioural
+    status: agreed
+    decided: { session: 4, date: 2026-03-23 }
+    text: >-
+      The box exists first; booking a van run to it tells the box its van. When the van run arrives, so
+      has every box booked onto it.
+  - id: R20
+    title: The vans, seen as a second view of the same run
+    kind: definitional
+    status: agreed
+    decided: { session: 4, date: 2026-03-23 }
+    untraced: "the overview's configuration, which carries no why:"
+    text: >-
+      Beside the requests, the logistics desk sees the vans: each van run with its boxes under it, a box
+      not booked yet on its own, and in each box its samples, each named with its request — none of the
+      requests' steps (ADR 0034).

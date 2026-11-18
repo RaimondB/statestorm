@@ -2,7 +2,7 @@
 
 # Rulebook
 
-17 rules in 6 topics: 14 agreed, 1 to confirm, 1 deferred, 1 superseded. [1 open question](questions.md). The terms are in the [glossary](glossary.md).
+20 rules in 7 topics: 17 agreed, 1 to confirm, 1 deferred, 1 superseded. [1 open question](questions.md). The terms are in the [glossary](glossary.md).
 
 ## [Requests and routes](requests.md)
 
@@ -50,3 +50,11 @@
 |---|---|---|
 | [R15](patient.md#R15) | agreed | The patient hears about the request, forward only |
 | [R16](patient.md#R16) | to-confirm | A failed request means a new sample is needed |
+
+## [Cool boxes and van runs](cool-boxes.md)
+
+| id | status | rule |
+|---|---|---|
+| [R18](cool-boxes.md#R18) | agreed | The samples of several requests going the same way travel in one cool box |
+| [R19](cool-boxes.md#R19) | agreed | A van run is booked to its boxes later; its arrival is theirs |
+| [R20](cool-boxes.md#R20) | agreed | The vans, seen as a second view of the same run |

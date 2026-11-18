@@ -16,6 +16,7 @@ values:
   # A scan as the scanner sends it: what happened, where, and — for a deviation — why.
   Scan: { scanId: string, event: string, site: string, reason: string? }
   TubeRow: { sample: string, tube: string }        # one row of a route's plan: which sample, in which tube
+  BoxRow: { box: string }                          # one cool box booked onto a van run (R19)
   # How the samples are to be handled — keep cold, protect from light, … — one per kind (ADR 0015).
   Instruction: { kind: string, detail: string }
 
@@ -44,6 +45,10 @@ packages:
   Patient:
     note: what the patient is told
     types: [PatientView]
+  Cool boxes:
+    note: a cool box packed for one lane with the samples of several requests, and the van run booked to it later
+    why: [R18, R19]
+    types: [CoolBox, VanRun, BoxRow]
   Deviations:
     note: a deviation status, pending until a person resolves or confirms it — only confirmed does it count
     types: [Deviation, SampleDeviation]
@@ -61,7 +66,7 @@ systems:
       # Which step of a route follows which is worked out here, from the route — logic the model does
       # not run: a scenario sends the links in its name, drawn as a step inside Ordering (ADR 0030).
       Ordering:  { context: Requests, packages: [Requests, Steps], computes: [Route.Link], note: the request and its route }
-      Logistics: { context: Sample logistics, packages: [Sites, Transfers, Samples, Deviations] }
+      Logistics: { context: Sample logistics, packages: [Sites, Transfers, Samples, Deviations, Cool boxes] }
       Bench:     { context: Testing, packages: [Analysis] }
   # A vendor's portal: what it shows the patient is specified here, and runs there (ADR 0020 §2).
   Patient portal:
@@ -123,7 +128,24 @@ overview:
   top: [PatientView]                       # what the patient is told, first and always
   band: [Route.tasks]                      # the route's own tasks, end to end
   hide: [Handling]
-  omit: [Deviation, Link, Site]            # a deviation is the substatus of the status that reported it; a link is plan; a site is master data
+  omit: [Deviation, Link, Site, CoolBox, VanRun]   # a deviation is the substatus of the status that reported it; a link is plan; a site is master data; boxes and vans are the Vans view's
+  # A second picture of the same run (ADR 0034): the van runs, each with the cool boxes booked onto it
+  # and the samples in each, named with their request. A box not booked yet stands on its own.
+  views:
+    Vans:
+      roots: [VanRun, CoolBox]
+      under:
+        CoolBox: { parent: VanRun, by: run }
+      hide: [BoxSlot]
+      omit: [Request, Route, Step, Task, Handling, Deviation, Link, Site, PatientView]
+      side: [Sample]
+      badges: roots
+      label:
+        VanRun: "${origin} → ${destination} · ${departs}"
+        CoolBox: "${origin} → ${destination}"
+      color:
+        VanRun: amber
+        CoolBox: teal
   side: [Sample]
   attributes: [reason]                     # why a deviation was reported, under the sample it is about
   follows: { type: Link, before: before, after: after }
@@ -798,6 +820,74 @@ aggregates:
         emit_on_entry: [ PatientInformed: { about: a new sample is needed } ]
         on: { RedrawNeeded: {} }
 
+  # ================================================================== cool boxes
+
+  # A cool box packed at a clinic for one lane, with the samples of several requests in it (R18); a van
+  # run is booked to it later (R19).
+  CoolBox:
+    why: [R18, R19]
+    creators: [Open]
+    children:
+      slots: { type: BoxSlot, via: command.box }
+    data:
+      origin:      { type: string }
+      destination: { type: string }
+      run:         { type: string, default: "" }   # the van run booked to it, once one is (R19)
+    initial: packing
+    states:
+      packing:
+        on:
+          Open:
+            takes: { origin: string, destination: string }
+            assign: { origin: command.origin, destination: command.destination }
+          Add:
+            takes: { sample: string }
+            send: { to: "BoxSlot#${id}-${command.sample}.Pack", with: { box: "${id}", sample: "${command.sample}" } }
+          BookTo:
+            why: [R19]
+            takes: { run: string }
+            target: booked
+            assign: { run: command.run }
+            emit: [ CoolBoxBooked: { box: "${id}", run: "${command.run}" } ]
+      booked:
+        on:
+          BookTo: { takes: { run: string } }
+          Arrive: { target: arrived, emit: [ CoolBoxArrived: { box: "${id}", run: "${run}" } ] }
+      arrived: { final: true, on: { Arrive: {} } }
+
+  # One sample in a box (R18): an entity of it, pointing at the sample, which knows nothing of the box.
+  BoxSlot:
+    why: [R18]
+    kind: entity
+    creators: [Pack]
+    references:
+      sample: { type: Sample, via: command.sample }
+    data:
+      box: { type: string }
+    initial: packed
+    states:
+      packed: { final: true, on: { Pack: { assign: { box: command.box } } } }
+
+  # The van, booked to the boxes it takes (R19); arrived, so are they.
+  VanRun:
+    why: [R19]
+    creators: [Book]
+    data:
+      origin:      { type: string }
+      destination: { type: string }
+      departs:     { type: string }
+      boxes:       { type: [BoxRow], key: box }
+    initial: booked
+    states:
+      booked:
+        on:
+          Book:
+            takes: { origin: string, destination: string, departs: string, boxes: [BoxRow] }
+            assign: { origin: command.origin, destination: command.destination, departs: command.departs, boxes: command.boxes }
+            emit: [ VanRunBooked: { run: "${id}", boxes: "${command.boxes}" } ]
+          Arrive: { target: arrived, emit: [ VanRunArrived: { run: "${id}", boxes: "${boxes}" } ] }
+      arrived: { final: true, on: { Arrive: {} } }
+
 policies:
 
   # An analysis asks its site what it is — by the id alone: a clinic or a lab (ADR 0028, R17).
@@ -891,8 +981,22 @@ policies:
     on: RequestFailed
     command: "PatientView#${event.request}.RedrawNeeded"
 
+  # A van run booked to its boxes: each is booked (R19); arrived, they are.
+  book_boxes:
+    why: [R19]
+    on: VanRunBooked
+    for_each: event.boxes
+    command: "CoolBox#${item.box}.BookTo"
+    with: { run: "${event.run}" }
+
+  boxes_arrive:
+    on: VanRunArrived
+    for_each: event.boxes
+    command: "CoolBox#${item.box}.Arrive"
+
 coverage:
   lives_on:
     Sample: the tube — tracked from its first scan to its last
     Link: a link in the plan — which step follows which — not a process
     Site: a clinic or a lab, registered once — a place, not a process (R17)
+

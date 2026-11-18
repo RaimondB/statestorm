@@ -50,3 +50,10 @@ terms:
   - term: Patient view
     definition: What the patient is told about their request.
     model: [PatientView]
+  - term: Cool box
+    definition: The samples of several requests packed together at a clinic for one lane, a slot per sample.
+    model: [CoolBox, BoxSlot]
+  - term: Van run
+    definition: A van booked to the cool boxes it takes from a clinic to a lab.
+    model: [VanRun]
+

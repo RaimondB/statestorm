@@ -1,0 +1,70 @@
+# R18, R19: the samples of two requests travel in one cool box. The box is packed at the clinic for
+# its lane before any van is booked — on its own until then; the van run booked to it takes it (the
+# Vans view draws it under the run from then on, ADR 0034), and its arrival is the box's. Each request
+# goes on as in 01, one department each.
+scenario: two requests in one cool box on a van run — packed first, the van booked to it later
+drawing: sample-to-result
+tags: [happy]
+why: [R18, R19]
+given:
+  include: [given/sites.yaml]
+  at: 2026-03-02T08:00:00Z
+  phase: Planning
+  send:
+    - Request#R12A.Create: { patient: P12A, samples: [S21] }
+    - Route#R12A-LAB1.Plan: { request: R12A, lab: LAB1, tubes: [ { sample: S21, tube: serum } ] }
+    - SiteVisit#R12A-CLIN1.Plan: { route: R12A-LAB1, site: CLIN1, samples: [S21] }
+    - CourierRun#R12A-C1.Plan: { route: R12A-LAB1, origin: CLIN1, destination: LAB1, by: van 3, samples: [S21] }
+    - Analysis#R12A-CHEM.Plan: { route: R12A-LAB1, site: LAB1, department: chemistry, stability: 8h, samples: [S21] }
+    - Route#R12A-LAB1.Link: { link: R12A-C1-after-CLIN1, before: "SiteVisit#R12A-CLIN1", after: "CourierRun#R12A-C1" }
+    - Route#R12A-LAB1.Link: { link: R12A-CHEM-after-C1, before: "CourierRun#R12A-C1", after: "Analysis#R12A-CHEM" }
+    - Request#R12B.Create: { patient: P12B, samples: [S22] }
+    - Route#R12B-LAB1.Plan: { request: R12B, lab: LAB1, tubes: [ { sample: S22, tube: edta } ] }
+    - SiteVisit#R12B-CLIN1.Plan: { route: R12B-LAB1, site: CLIN1, samples: [S22] }
+    - CourierRun#R12B-C1.Plan: { route: R12B-LAB1, origin: CLIN1, destination: LAB1, by: van 3, samples: [S22] }
+    - Analysis#R12B-HAEM.Plan: { route: R12B-LAB1, site: LAB1, department: haematology, stability: 24h, samples: [S22] }
+    - Route#R12B-LAB1.Link: { link: R12B-C1-after-CLIN1, before: "SiteVisit#R12B-CLIN1", after: "CourierRun#R12B-C1" }
+    - Route#R12B-LAB1.Link: { link: R12B-HAEM-after-C1, before: "CourierRun#R12B-C1", after: "Analysis#R12B-HAEM" }
+when:
+  - phase: Packed at the clinic
+  - send: { Sample#S21.Scan: { scanId: c-S21, event: Collected, site: CLIN1 } }
+  - send: { Sample#S22.Scan: { scanId: c-S22, event: Collected, site: CLIN1 } }
+  - send: { Sample#S21.Scan: { scanId: p-S21, event: Packed, site: CLIN1 } }
+  - send: { Sample#S22.Scan: { scanId: p-S22, event: Packed, site: CLIN1 } }
+  # The box for the lane, with both requests' samples in it — no van yet (R18).
+  - send: { CoolBox#BOX12.Open: { origin: CLIN1, destination: LAB1 } }
+  - send: { CoolBox#BOX12.Add: { sample: S21 } }
+  - send: { CoolBox#BOX12.Add: { sample: S22 } }
+  - expect_state:
+      CoolBox#BOX12: packing
+      BoxSlot#BOX12-S22: packed
+  - data: { CoolBox#BOX12: { run: "" } }
+  - phase: The van booked
+  - send: { VanRun#VAN12.Book: { origin: CLIN1, destination: LAB1, departs: "10:30", boxes: [ { box: BOX12 } ] } }
+  - expect_state: { CoolBox#BOX12: booked }                 # the van run booked to it (R19)
+  - data: { CoolBox#BOX12: { run: VAN12 } }
+  - phase: On the van
+  - send: { Sample#S21.Scan: { scanId: u-S21, event: PickedUp, site: CLIN1 } }
+  - send: { Sample#S22.Scan: { scanId: u-S22, event: PickedUp, site: CLIN1 } }
+  - advance: 40m
+  - send: { Sample#S21.Scan: { scanId: d-S21, event: Delivered, site: LAB1 } }
+  - send: { Sample#S22.Scan: { scanId: d-S22, event: Delivered, site: LAB1 } }
+  - send: { VanRun#VAN12.Arrive: {} }
+  - expect_state: { CoolBox#BOX12: arrived }
+  - phase: At the lab
+  - send: { Sample#S21.Scan: { scanId: r-S21, event: Received, site: LAB1 } }
+  - send: { Sample#S22.Scan: { scanId: r-S22, event: Received, site: LAB1 } }
+  - send: { Sample#S21.Scan: { scanId: q-S21, event: Queued, site: LAB1 } }
+  - send: { Sample#S22.Scan: { scanId: q-S22, event: Queued, site: LAB1 } }
+  - advance: 1h
+  - send: { Sample#S21.Scan: { scanId: a-S21, event: Analysed, site: LAB1 } }
+  - send: { Sample#S22.Scan: { scanId: a-S22, event: Analysed, site: LAB1 } }
+  - send: { Sample#S21.Scan: { scanId: x-S21, event: Released, site: LAB1 } }
+  - send: { Sample#S22.Scan: { scanId: x-S22, event: Released, site: LAB1 } }
+then:
+  - state:
+      Request#R12A: completed
+      Request#R12B: completed
+      VanRun#VAN12: arrived
+      CoolBox#BOX12: arrived
+  - no_findings: [error, warning]
