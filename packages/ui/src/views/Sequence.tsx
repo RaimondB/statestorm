@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactElement } from "react";
 import {
-  DEPTHS, lifelinesOf, openAt, PERSON, sequenceOf,
+  DEPTHS, lifelinesOf, messageText, openAt, PERSON, sequenceOf,
   type Depth, type Model, type SequenceItem, type SequenceMarks,
 } from "@statestorm/kernel";
 import { frameOfEntry, type Run } from "../session.ts";
@@ -86,7 +86,7 @@ export function Sequence({ model, run, index, onIndex, state, onState, select }:
 
   const layout = useMemo(() => {
     if (!s) return undefined;
-    const labelOf = (i: SequenceItem) => (i.kind === "message" ? `${i.label}${i.times ? ` ×${i.times}  ▸` : ""}` : i.kind === "note" ? i.text : "");
+    const labelOf = (i: SequenceItem) => (i.kind === "message" ? `${i.choice ? "◇ " : ""}${messageText(i)}${i.times ? "  ▸" : ""}` : i.kind === "note" ? i.text : "");
     const all = (its: SequenceItem[]): SequenceItem[] => its.flatMap((i) => (i.kind === "frame" ? all(i.items) : [i]));
     const widest = Math.max(0, ...all(s.items).map((i) => measure(labelOf(i), "label")));
     const name = Math.max(0, ...s.participants.map((p) => measure(s.lifelines[p]!.name, "title") + 44));
@@ -327,7 +327,7 @@ function Arrow({ item, y, x1, x2, past, name, onGo, onFold }: {
 }): ReactElement {
   const marker = item.style === "command" ? "url(#seq-head)" : "url(#seq-open)";
   // A receiver chosen by the payload (ADR 0031): a decision's diamond before the label, which names the values.
-  const label = `${item.choice ? "◇ " : ""}${item.label}${item.times ? ` ×${item.times}` : ""}`;
+  const label = `${item.choice ? "◇ " : ""}${messageText(item)}`;
   const who = [...new Set(item.instances)];
   const chosen = item.choice ? ` — a choice: told to ${name(item.to)} because ${item.choice.by}, one of ${item.choice.among.join(", ")}` : "";
   const tip = `${name(item.from)} → ${name(item.to)}: ${label}${who.length > 1 ? ` — ${who.join(", ")}` : who.length ? ` — ${who[0]}` : ""}${chosen} — go to it, and see it in the inspector`;
