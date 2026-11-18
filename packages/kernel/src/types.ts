@@ -374,4 +374,20 @@ export interface Model {
 }
 
 export class ModelError extends Error {}
-export class ExprError extends Error {}
+/**
+ * An expression that cannot be read or evaluated. It is an outcome, not a fault: a guard that cannot be
+ * read is reported as rejected (R21), and a variant tried in vain moves on to the next. So it is made
+ * without a stack trace, which costs more than the evaluation it reports on.
+ */
+export class ExprError extends Error {
+  constructor(message: string) {
+    const limit = Error.stackTraceLimit;
+    Error.stackTraceLimit = 0;
+    try {
+      super(message);
+    } finally {
+      Error.stackTraceLimit = limit;
+    }
+    this.name = "ExprError";
+  }
+}

@@ -73,7 +73,23 @@ const BINDING: Record<string, number> = {
   "*": 5, "/": 5,
 };
 
+/**
+ * Each expression is parsed once (B-4): a model says the same guards and templates over and over, and a
+ * run evaluates them thousands of times. A parsed tree is never changed, so it is shared. An expression
+ * that does not parse is not kept: it says why each time it is read.
+ */
+const parsed = new Map<string, Node>();
+
 export function parse(src: string): Node {
+  let tree = parsed.get(src);
+  if (tree === undefined) {
+    tree = parseText(src);
+    parsed.set(src, tree);
+  }
+  return tree;
+}
+
+function parseText(src: string): Node {
   const toks = lex(src);
   let p = 0;
   const peek = () => toks[p]!;
