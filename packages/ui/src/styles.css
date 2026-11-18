@@ -571,6 +571,7 @@ ol.log .chain { grid-column: 4; font-size: 0.85rem; color: var(--muted); }
 .seq-label { font: 12px var(--sans); fill: var(--fg); paint-order: stroke; stroke: var(--surface); stroke-width: 4px; }
 .seq-message { cursor: pointer; }
 .seq-message:hover .seq-label { fill: var(--accent); }
+.seq-label.choice { font-style: italic; }
 .seq-note rect { fill: var(--surface-2, var(--bg)); stroke: var(--line); }
 .seq-note text { font: italic 12px var(--sans); fill: var(--muted); }
 .seq-message.future, .seq-note.future { opacity: 0.35; }

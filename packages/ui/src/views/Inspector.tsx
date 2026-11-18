@@ -108,7 +108,11 @@ export function Inspector({ model, run, index, selection, select, onIndex, docs,
             <li key={t.id}><Link onClick={() => select({ kind: "transition", machine, id: t.id })}>{machine}.{t.ownerRef} on {t.name}</Link>
               {t.transition.why?.length ? <span className="hint"> · {t.transition.why.join(", ")}</span> : null}</li>
           ))}</ul></>}
-          {outside.length > 0 && <div className="hint">told to {outside.map((x) => x.system === x.name ? x.name : `${x.system} (${x.name})`).join(", ")}</div>}
+          {outside.length > 0 && <div className="hint">told to {outside.map((x) => {
+            const who = x.system === x.name ? x.name : `${x.system} (${x.name})`;
+            const by = Object.entries(x.receivesWhere?.[event] ?? {}).map(([f, vs]) => `${f} ${vs.join(" or ")}`).join(", ");
+            return by ? `${who} when ${by}` : who;
+          }).join(", ")}{outside.some((x) => x.receivesWhere?.[event]) ? " — chosen by the payload (ADR 0031)" : ""}</div>}
           <Why ids={[...new Set(raisers.flatMap(({ t }) => t.transition.why ?? []))]} title="Rules where it is raised" />
         </>)}
         {pol && (<>

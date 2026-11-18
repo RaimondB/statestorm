@@ -326,9 +326,11 @@ function Arrow({ item, y, x1, x2, past, name, onGo, onFold }: {
   name: (id: string) => string; onGo: () => void; onFold?: () => void;
 }): ReactElement {
   const marker = item.style === "command" ? "url(#seq-head)" : "url(#seq-open)";
-  const label = `${item.label}${item.times ? ` ×${item.times}` : ""}`;
+  // A receiver chosen by the payload (ADR 0031): a decision's diamond before the label, which names the values.
+  const label = `${item.choice ? "◇ " : ""}${item.label}${item.times ? ` ×${item.times}` : ""}`;
   const who = [...new Set(item.instances)];
-  const tip = `${name(item.from)} → ${name(item.to)}: ${label}${who.length > 1 ? ` — ${who.join(", ")}` : who.length ? ` — ${who[0]}` : ""} — go to it, and see it in the inspector`;
+  const chosen = item.choice ? ` — a choice: told to ${name(item.to)} because ${item.choice.by}, one of ${item.choice.among.join(", ")}` : "";
+  const tip = `${name(item.from)} → ${name(item.to)}: ${label}${who.length > 1 ? ` — ${who.join(", ")}` : who.length ? ` — ${who[0]}` : ""}${chosen} — go to it, and see it in the inspector`;
   const self = x1 === x2;
   const lx = self ? x1 + 48 : (x1 + x2) / 2;
   const w = measure(label, "label");
@@ -339,7 +341,7 @@ function Arrow({ item, y, x1, x2, past, name, onGo, onFold }: {
         {self
           ? <path d={`M${x1},${y + 10} h40 v16 h-38`} className={`seq-arrow ${item.style}`} markerEnd={marker} />
           : <line x1={x1} y1={y + 14} x2={x2 - (x2 > x1 ? 2 : -2)} y2={y + 14} className={`seq-arrow ${item.style}`} markerEnd={marker} />}
-        <text x={lx} y={y + 8} textAnchor={self ? "start" : "middle"} className="seq-label">{label}</text>
+        <text x={lx} y={y + 8} textAnchor={self ? "start" : "middle"} className={`seq-label${item.choice ? " choice" : ""}`}>{label}</text>
       </g>
       {onFold && (
         <g role="button" onClick={onFold} className="seq-unfold">
