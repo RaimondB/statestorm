@@ -4,7 +4,7 @@
  * who are not programmers, and "expected object, received string at .states.a.on" is not an
  * error message for them.
  */
-import { SystemsError, systemFindings, systemsOf } from "./systems.ts";
+import { sequenceLabelsOf, SystemsError, systemFindings, systemsOf } from "./systems.ts";
 import { located, mergeModel } from "./include.ts";
 import { refsOf } from "./expr.ts";
 import { ANCESTORS, INHERITED, resolveInheritance } from "./inherit.ts";
@@ -818,8 +818,8 @@ export function loadModel(text: string, files: Record<string, string> = {}): Mod
 function modelOf(raw: Record<string, unknown>): Model {
   // A misspelt section would otherwise be ignored without a word.
   for (const key of Object.keys(raw)) {
-    if (!["context", "values", "packages", "aggregates", "policies", "overview", "coverage", "systems", "contexts", "domains", "relations", "roles"].includes(key)) {
-      throw new ModelError(`unknown top-level section \`${key}\` (expected context, values, packages, aggregates, policies, overview, coverage, systems, contexts, domains, relations)`);
+    if (!["context", "values", "packages", "aggregates", "policies", "overview", "sequence", "coverage", "systems", "contexts", "domains", "relations", "roles"].includes(key)) {
+      throw new ModelError(`unknown top-level section \`${key}\` (expected context, values, packages, aggregates, policies, overview, sequence, coverage, systems, contexts, domains, relations, roles)`);
     }
   }
   const model: Model = { context: String(raw.context ?? "unnamed"), values: {}, packages: [], aggregates: {}, policies: {}, findings: [] };
@@ -853,6 +853,8 @@ function modelOf(raw: Record<string, unknown>): Model {
       model.systems = systems;
       model.findings.push(...systemFindings(model));
     }
+    const labels = sequenceLabelsOf(raw.sequence, model);
+    if (labels) model.sequenceLabels = labels;
   } catch (err) {
     if (err instanceof SystemsError) throw new ModelError(err.message);
     throw err;

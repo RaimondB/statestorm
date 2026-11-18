@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { loadModel } from "../src/model.ts";
 import { createWorld, send } from "../src/engine.ts";
 import { PERSON } from "../src/systems.ts";
-import { lifelineNamed, lifelinesOf, openAt, sequenceOf, sequenceToMermaid, type Sequence, type SequenceItem, type SequenceView } from "../src/sequence.ts";
+import { lifelineNamed, lifelinesOf, listText, messageText, openAt, sequenceOf, sequenceToMermaid, type Sequence, type SequenceItem, type SequenceView } from "../src/sequence.ts";
 import { parseScenario, runScenario } from "../../scenarios/src/index.ts";
 import { fileURLToPath } from "node:url";
 import { readScenario } from "../../scenarios/src/files.ts";
@@ -24,7 +24,7 @@ function all(items: SequenceItem[]): SequenceItem[] {
 }
 const messages = (s: Sequence) => all(s.items).filter((i): i is Extract<SequenceItem, { kind: "message" }> => i.kind === "message");
 const said = (items: SequenceItem[]) => items.map((i) =>
-  i.kind === "message" ? `${i.from} → ${i.to}: ${i.label}${i.times ? ` ×${i.times}` : ""}` : i.kind === "note" ? `[${i.text}]` : `{${i.frame} ${i.label}${i.folded ? ", folded" : ""}}`);
+  i.kind === "message" ? `${i.from} → ${i.to}: ${messageText(i)}` : i.kind === "note" ? `[${i.text}]` : `{${i.frame} ${i.label}${i.folded ? ", folded" : ""}}`);
 
 test("the tree a lifeline opens down: domain → system → sub-system → aggregate; one child is opened through", () => {
   assert.deepEqual(lines.nodes["domain:Diagnostics"]!.children, ["system:Lab", "system:Patient portal"]);
@@ -55,7 +55,7 @@ test("a run in causal order: each arrow, the steps it set off inside, then what 
   assert.ok(setup?.kind === "frame" && setup.messages === 12);   // the sites, included (ADR 0029), then the plan
   assert.ok(toTheLab?.kind === "frame" && toTheLab.label === "To the lab");
   assert.deepEqual(said(toTheLab.items).slice(0, 4), [
-    "system:Scanners → system:Lab: Sample.Scan",
+    "system:Scanners → system:Lab: Sample.Scan · Collected · CLIN1 · S3",
     "[2 steps inside Lab]",
     "system:Lab → system:Patient portal: Collected → PatientView.Collected",
     "system:Patient portal → system:Messaging: PatientInformed [about = collected]",
@@ -111,7 +111,7 @@ test("an event told to the part its payload chooses (ADR 0031): only that one, a
 
 test("a vendor opened into its parts (ADR 0020 §3, §4): the payload says which part sent a scan", () => {
   const s = sequence("02-haemolysed-at-the-lab", { ...at("system", ["system:Scanners"]), fold: false });
-  const from = new Set(messages(s).filter((m) => m.label === "Sample.Scan").map((m) => m.from));
+  const from = new Set(messages(s).filter((m) => m.command === "Sample.Scan").map((m) => m.from));
   assert.deepEqual([...from].sort(), ["subsystem:Scanners/Bench scanner", "subsystem:Scanners/Clinic app", "subsystem:Scanners/Courier app"]);
   assert.ok(s.participants.includes("system:Lab"), "the Lab still whole");
   const domain = sequence("02-haemolysed-at-the-lab", at("domain"));
@@ -222,4 +222,31 @@ test("the picture compared is the one drawn: a loop stays a loop with its lifeli
   const loops = all(s.items).filter((i) => i.kind === "frame" && i.frame === "loop");
   assert.ok(loops.length > 0);
   assert.ok(messages(s).some((m) => m.from === "aggregate:Order" && m.to === "aggregate:Item"));
+});
+
+test("an arrow says the fields the model declares, and the instances it reached (ADR 0032)", () => {
+  const s = sequence("01-two-tubes-to-the-lab", { ...at("system"), toggled: ["setup"] });
+  const said_ = messages(s).map(messageText);
+  // A scan's event and site, and its sample; a route's samples, a roll-up of its tubes.
+  assert.ok(said_.includes("Sample.Scan · Collected · CLIN1 · S1"));
+  assert.ok(said_.includes("Route.Plan · LAB1 · S1, S2"));
+  // Alike scans fold into one arrow, which lists every sample it stands for.
+  assert.ok(said_.includes("Sample.Scan · Packed · CLIN1 · S1, S2"), "a fold lists its samples");
+  // A roll-up of many stays short: the first three, then how many more.
+  assert.equal(listText(["S1", "S2", "S3", "S4", "S5", "S2"]), "S1, S2, S3 +2");
+
+  // Nothing declared: a command shows the fields its senders are narrowed by, and no ids.
+  const LAB = readFileSync(new URL("../../examples/models/lab.yaml", import.meta.url), "utf8");
+  const bare = loadModel(LAB.replace(/\nsequence:\n  label:\n(    .*\n)+/, "\n"));
+  assert.equal(bare.sequenceLabels, undefined);
+  const r = runScenario(bare, readScenario(fileURLToPath(new URL("../../examples/scenarios/lab/01-two-tubes-to-the-lab.yaml", import.meta.url))), { kind: "fifo" });
+  const plain = messages(sequenceOf(bare, r.world.log, at("system"), r.marks)).map(messageText);
+  assert.ok(plain.includes("Sample.Scan · Collected"), "the event: what tells its senders apart");
+
+  const refused = (yaml: string, message: RegExp) => assert.throws(() => loadModel(LAB.replace(/\nsequence:\n  label:\n(    .*\n)+/, `\nsequence:\n  label:\n    ${yaml}\n`)), message);
+  refused("Sample.Fly: [event]", /Sample answers no command `Fly`/);
+  refused("Route.Plan: [colour]", /`colour` is not among its fields \(request, lab, priority, tubes\), nor `id`/);
+  refused("Nothing: [x]", /`Nothing` is no command \(Type.Command\) and no event the model raises/);
+  refused("PatientInformed: [colour]", /`colour` is not among its fields \(about\)/);
+  refused("Sample.Scan: []", /name the fields its arrow shows/);
 });

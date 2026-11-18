@@ -366,6 +366,8 @@ export interface Model {
   coverage?: Json;
   /** ADR 0018: the systems, bounded contexts and sub-systems its types live in, when declared. */
   systems?: SystemsDef;
+  /** ADR 0032: by command (`Type.Command`) or event, the fields its arrow in the sequence shows. */
+  sequenceLabels?: Record<string, string[]>;
   /** ADR 0019: where each declared name came from, when the model is in several files —
    *  `aggregates.Order` → `model/orders.yaml`. */
   sources?: Record<string, string>;

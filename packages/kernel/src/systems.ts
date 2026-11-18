@@ -615,6 +615,41 @@ export function roleOfType(model: Model, type: string): RoleDef | undefined {
   return undefined;
 }
 
+/**
+ * `sequence: label:` (ADR 0032): for a command (`Type.Command`) or an event, the payload fields its arrow
+ * shows, in order — a path into a list of rows (`logisticUnits.lu`) shows each row's — and `id`, the
+ * instance it reaches, shown after them so alike arrows still fold and list theirs.
+ */
+export function sequenceLabelsOf(raw: unknown, model: Model): Record<string, string[]> | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  const rec = record(raw, "sequence");
+  only(rec, ["label"], "sequence");
+  const out: Record<string, string[]> = {};
+  const raised = new Set(Object.values(model.aggregates).flatMap((m) => [...eventsRaisedBy(m)]));
+  for (const [key, body] of Object.entries(record(rec.label, "sequence.label"))) {
+    const where = `sequence.label.${key}`;
+    const fields = list(body, where);
+    if (fields.length === 0) throw new SystemsError(`${where}: name the fields its arrow shows`);
+    let known: Set<string> | undefined;
+    const m = NAME.exec(key);
+    if (m) {
+      const type = model.aggregates[m[1]!];
+      if (!type) throw new SystemsError(`${where}: there is no type called \`${m[1]}\``);
+      if (!commandsAnsweredBy(type).has(m[2]!)) throw new SystemsError(`${where}: ${m[1]} answers no command \`${m[2]}\``);
+      known = fieldsTaken(model, type, m[2]!);
+    } else {
+      if (!raised.has(key)) throw new SystemsError(`${where}: \`${key}\` is no command (Type.Command) and no event the model raises`);
+      known = fieldsOfEvent(model, key);
+    }
+    for (const f of fields) {
+      const head = f.split(".")[0]!;
+      if (f !== "id" && known && !known.has(head)) throw new SystemsError(`${where}: \`${head}\` is not among its fields (${[...known].join(", ")}), nor \`id\``);
+    }
+    out[key] = fields;
+  }
+  return out;
+}
+
 /** The payload fields some external system narrows this command by — what tells its senders apart. */
 export function narrowedBy(model: Model, type: string, command: string): string[] {
   return [...new Set((model.systems?.subsystems ?? []).flatMap((p) => (p.sends ?? []).filter((s) => s.type === type && s.command === command).flatMap((s) => Object.keys(s.where ?? {}))))];

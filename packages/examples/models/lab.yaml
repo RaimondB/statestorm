@@ -110,6 +110,13 @@ relations:
   - { upstream: Hospital information system, downstream: Requests, pattern: anticorruption-layer }
   - { upstream: Lab, downstream: Patient portal, pattern: customer-supplier }
 
+# What each arrow of the sequence says beside its name (ADR 0032): a scan's event and site, and the
+# sample it reached — listed, when alike scans fold into one; a route's samples, a roll-up of its tubes.
+sequence:
+  label:
+    Sample.Scan: [event, site, id]
+    Route.Plan: [lab, tubes.sample]
+
 overview:
   roots: [Request]
   sequence: [Route.steps]                  # left to right, by which step follows which

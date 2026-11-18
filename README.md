@@ -229,6 +229,11 @@ through time; what they change stays in their browser. The bundled examples are 
   tells an outside part of an event only when it carries those values. In the sequence, such an arrow
   is marked as a choice: a ◇ before the label, which names the values, `[about = collected]`, and an
   `alt` frame in the Mermaid export.
+- **What an arrow says** (ADR 0032): `sequence: label: { Sample.Scan: [event, site, id] }` shows those
+  fields of a message beside its name, `Sample.Scan · Collected · CLIN1 · S1`. A list shows its values,
+  `tubes.sample` picks a field from each row, and more than three are cut short (`S1, S2, S3 +2`). `id`
+  lists the instances reached, so a fold of alike arrows names them all. With nothing declared, a
+  command from outside shows the fields its senders are narrowed by.
 - **The docs travel with it:** the domain's `docs/` sources — rules, glossary, questions, profile, the
   sessions' logs (not the generated rulebook) — go into the share, served site and *Open folder…* alike,
   for the **Docs** view (ADR 0016 §9): every topic and its rules, each rule linked to what cites it — a

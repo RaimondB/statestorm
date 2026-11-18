@@ -7,7 +7,7 @@
  */
 import type { LogEntry } from "./log.ts";
 import type { Json, Model, SubsystemDef, TransitionDef } from "./types.ts";
-import { choiceOfEvent, mid, ownersOfType, PERSON, placeOf, receiversOfEvent, senderOfCommand, SystemsError, transitionsOf } from "./systems.ts";
+import { choiceOfEvent, mid, narrowedBy, ownersOfType, PERSON, placeOf, receiversOfEvent, senderOfCommand, SystemsError, transitionsOf } from "./systems.ts";
 
 // ------------------------------------------------------------------ the lifelines (§7)
 
@@ -133,6 +133,8 @@ export type SequenceItem =
     event?: string; command?: string; policy?: string;
     /** ADR 0031: the receiver was chosen by the event's payload — by these values, among these parts. */
     choice?: Choice;
+    /** ADR 0032: the label is followed by the ids of the instances it reached — a fold's, all of them. */
+    ids?: true;
     /** Folded: the same arrow, this many times; `fold` opens it. */
     times?: number; fold?: string;
   }
@@ -201,7 +203,39 @@ interface Fact {
   /** The policy firing that sent it, when its rule iterates. */
   loop?: { seq: number; label: string };
   ignored: boolean;
-  what: { event?: string; command?: string; policy?: string; choice?: Choice };
+  what: { event?: string; command?: string; policy?: string; choice?: Choice; ids?: true };
+}
+
+/** Values in a label: the first three, then how many more (ADR 0032) — a roll-up of many stays short. */
+export function listText(values: string[]): string {
+  const seen = [...new Set(values.filter((v) => v !== ""))];
+  return seen.length <= 3 ? seen.join(", ") : `${seen.slice(0, 3).join(", ")} +${seen.length - 3}`;
+}
+
+/** A field of a payload, as text: a path into a list of rows takes each row's (ADR 0032). */
+function fieldText(payload: Json | undefined, path: string[]): string[] {
+  if (payload === undefined || payload === null) return [];
+  if (Array.isArray(payload)) return payload.flatMap((row) => fieldText(row, path));
+  if (path.length === 0) return typeof payload === "object" ? [] : [String(payload)];
+  if (typeof payload !== "object") return [];
+  return fieldText((payload as Record<string, Json>)[path[0]!], path.slice(1));
+}
+
+/**
+ * What an arrow says beside its name (ADR 0032): the fields the model declares for it, or — for a
+ * command, by default — those its senders are narrowed by. Empty fields are left out; `id` is not a
+ * field but a request to list the instances reached.
+ */
+function shown(model: Model, key: string, payload: Record<string, Json>, byDefault: string[]): { text: string; ids: boolean } {
+  const fields = model.sequenceLabels?.[key] ?? byDefault;
+  const text = fields.filter((f) => f !== "id").map((f) => listText(fieldText(payload, f.split(".")))).filter((t) => t !== "").join(" · ");
+  return { text, ids: fields.includes("id") };
+}
+
+/** An arrow's whole text: its label, the ids it reached (ADR 0032), how often it repeats. */
+export function messageText(item: Extract<SequenceItem, { kind: "message" }>): string {
+  const ids = item.ids ? listText(item.instances.map((i) => i.slice(i.indexOf("#") + 1))) : "";
+  return `${item.label}${ids ? ` · ${ids}` : ""}${item.times ? ` ×${item.times}` : ""}`;
 }
 
 function factsOf(model: Model, log: LogEntry[]): Fact[] {
@@ -219,9 +253,12 @@ function factsOf(model: Model, log: LogEntry[]): Fact[] {
       if (e.redelivery) continue;
       const type = typeOfInstance(e.instance);
       const base = { key: `c${e.seq}`, seq: e.seq, toType: type, instance: e.instance, parent: commandAbove(e.cause), ignored: ignored.has(e.seq), what: { command: `${type}.${e.name}` } as Fact["what"] };
+      const said = shown(model, `${type}.${e.name}`, e.payload as Record<string, Json>, e.cause === 0 ? narrowedBy(model, type, e.name) : []);
+      const named = `${type}.${e.name}${said.text ? ` · ${said.text}` : ""}`;
+      if (said.ids) base.what.ids = true;
       if (e.cause === 0) {
         const part = senderOfCommand(model, type, e.name, e.payload as Record<string, Json>);
-        out.push({ ...base, kind: "input", ...(part ? { fromPart: part } : {}), label: `${type}.${e.name}`, style: "command" });
+        out.push({ ...base, kind: "input", ...(part ? { fromPart: part } : {}), label: named, style: "command" });
         continue;
       }
       // Walk up the causes: an owner's command means a send inside its aggregate; a policy, a hop.
@@ -242,8 +279,10 @@ function factsOf(model: Model, log: LogEntry[]): Fact[] {
         }
         c = bySeq.get(c.cause);
       }
-      if (hop) out.push({ ...base, kind: "hop", fromType: typeOfInstance(hop.instance), label: `${hop.event} → ${type}.${e.name}`, style: "event", ...(loop ? { loop } : {}), what: { event: hop.event, command: `${type}.${e.name}`, ...(policy ? { policy } : {}) } });
-      else out.push({ ...base, kind: "inside", fromType: type, label: `${type}.${e.name}`, style: "command" });
+      if (hop) {
+        const ev = shown(model, hop.event, hop.payload as Record<string, Json>, []);
+        out.push({ ...base, kind: "hop", fromType: typeOfInstance(hop.instance), label: `${hop.event}${ev.text ? ` · ${ev.text}` : ""} → ${named}`, style: "event", ...(loop ? { loop } : {}), what: { event: hop.event, command: `${type}.${e.name}`, ...(policy ? { policy } : {}), ...(said.ids ? { ids: true as const } : {}) } });
+      } else out.push({ ...base, kind: "inside", fromType: type, label: named, style: "command" });
     } else if (e.kind === "event") {
       // Told only to the parts whose values the payload matches (ADR 0031); where the payload chooses,
       // the arrow says by what, and among whom.
@@ -251,11 +290,12 @@ function factsOf(model: Model, log: LogEntry[]): Fact[] {
       const choice = choiceOfEvent(model, e.event);
       const by = choice.fields.map((f) => `${f} = ${String(payload[f])}`).join(", ");
       const among = choice.among.map((p) => p.name);
+      const said = shown(model, e.event, payload, []);
       for (const p of receiversOfEvent(model, e.event, payload).filter((x) => parts.includes(x))) {
         out.push({
           key: `t${e.seq}:${p.system}/${p.name}`, seq: e.seq, kind: "tell", fromType: typeOfInstance(e.instance), toPart: p,
-          label: by ? `${e.event} [${by}]` : e.event, style: "event", instance: e.instance, parent: commandAbove(e.cause), ignored: false,
-          what: { event: e.event, ...(by ? { choice: { by, among } } : {}) },
+          label: `${e.event}${said.text ? ` · ${said.text}` : ""}${by ? ` [${by}]` : ""}`, style: "event", instance: e.instance, parent: commandAbove(e.cause), ignored: false,
+          what: { event: e.event, ...(by ? { choice: { by, among } } : {}), ...(said.ids ? { ids: true as const } : {}) },
         });
       }
     }
@@ -536,9 +576,9 @@ export function sequenceToMermaid(s: Sequence): string {
       if (i.kind === "message" && i.choice) {
         // A receiver chosen by the payload (ADR 0031): the branch taken, as an alt frame.
         lines.push(`${indent}alt ${i.choice.by} — one of ${i.choice.among.join(", ")}`);
-        lines.push(`${indent}  ${mid(i.from)}${i.style === "command" ? "->>" : "--)"}${mid(i.to)}: ${i.label}${i.times ? ` ×${i.times}` : ""}`);
+        lines.push(`${indent}  ${mid(i.from)}${i.style === "command" ? "->>" : "--)"}${mid(i.to)}: ${messageText(i)}`);
         lines.push(`${indent}end`);
-      } else if (i.kind === "message") lines.push(`${indent}${mid(i.from)}${i.style === "command" ? "->>" : "--)"}${mid(i.to)}: ${i.label}${i.times ? ` ×${i.times}` : ""}`);
+      } else if (i.kind === "message") lines.push(`${indent}${mid(i.from)}${i.style === "command" ? "->>" : "--)"}${mid(i.to)}: ${messageText(i)}`);
       else if (i.kind === "note") lines.push(`${indent}Note over ${mid(i.over)}: ${i.text}`);
       else if (i.frame === "loop" || i.frame === "repeat") {
         lines.push(`${indent}loop ${i.label}`);
