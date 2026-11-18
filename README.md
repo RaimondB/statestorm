@@ -225,6 +225,10 @@ through time; what they change stays in their browser. The bundled examples are 
   says that a scenario sends that command for logic the model does not run, such as a calculation or a
   search. The sequence draws it as a step inside that part, never from a person, and the inspector says
   "worked out inside".
+- **Receives narrowed by the payload** (ADR 0031): `receives: [{ PatientInformed: { about: [collected] } }]`
+  tells an outside part of an event only when it carries those values. In the sequence, such an arrow
+  is marked as a choice: a ◇ before the label, which names the values, `[about = collected]`, and an
+  `alt` frame in the Mermaid export.
 - **The docs travel with it:** the domain's `docs/` sources — rules, glossary, questions, profile, the
   sessions' logs (not the generated rulebook) — go into the share, served site and *Open folder…* alike,
   for the **Docs** view (ADR 0016 §9): every topic and its rules, each rule linked to what cites it — a

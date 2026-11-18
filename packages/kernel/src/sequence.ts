@@ -7,7 +7,7 @@
  */
 import type { LogEntry } from "./log.ts";
 import type { Json, Model, SubsystemDef, TransitionDef } from "./types.ts";
-import { mid, ownersOfType, PERSON, placeOf, senderOfCommand, SystemsError, transitionsOf } from "./systems.ts";
+import { choiceOfEvent, mid, ownersOfType, PERSON, placeOf, receiversOfEvent, senderOfCommand, SystemsError, transitionsOf } from "./systems.ts";
 
 // ------------------------------------------------------------------ the lifelines (§7)
 
@@ -131,6 +131,8 @@ export type SequenceItem =
     /** What it is, by name: the event that set it off, the command it became (`Type.Command`), the
      *  policy that carried it — for whoever explains it. */
     event?: string; command?: string; policy?: string;
+    /** ADR 0031: the receiver was chosen by the event's payload — by these values, among these parts. */
+    choice?: Choice;
     /** Folded: the same arrow, this many times; `fold` opens it. */
     times?: number; fold?: string;
   }
@@ -144,6 +146,9 @@ export type SequenceItem =
     messages: number;
     items: SequenceItem[];
   };
+
+/** A receiver chosen by an event's payload (ADR 0031): `platform = B`, among the parts that could be told. */
+export interface Choice { by: string; among: string[] }
 
 export interface Sequence {
   open: string[];
@@ -196,7 +201,7 @@ interface Fact {
   /** The policy firing that sent it, when its rule iterates. */
   loop?: { seq: number; label: string };
   ignored: boolean;
-  what: { event?: string; command?: string; policy?: string };
+  what: { event?: string; command?: string; policy?: string; choice?: Choice };
 }
 
 function factsOf(model: Model, log: LogEntry[]): Fact[] {
@@ -240,10 +245,17 @@ function factsOf(model: Model, log: LogEntry[]): Fact[] {
       if (hop) out.push({ ...base, kind: "hop", fromType: typeOfInstance(hop.instance), label: `${hop.event} → ${type}.${e.name}`, style: "event", ...(loop ? { loop } : {}), what: { event: hop.event, command: `${type}.${e.name}`, ...(policy ? { policy } : {}) } });
       else out.push({ ...base, kind: "inside", fromType: type, label: `${type}.${e.name}`, style: "command" });
     } else if (e.kind === "event") {
-      for (const p of parts.filter((x) => (x.receives ?? []).includes(e.event))) {
+      // Told only to the parts whose values the payload matches (ADR 0031); where the payload chooses,
+      // the arrow says by what, and among whom.
+      const payload = e.payload as Record<string, Json>;
+      const choice = choiceOfEvent(model, e.event);
+      const by = choice.fields.map((f) => `${f} = ${String(payload[f])}`).join(", ");
+      const among = choice.among.map((p) => p.name);
+      for (const p of receiversOfEvent(model, e.event, payload).filter((x) => parts.includes(x))) {
         out.push({
           key: `t${e.seq}:${p.system}/${p.name}`, seq: e.seq, kind: "tell", fromType: typeOfInstance(e.instance), toPart: p,
-          label: e.event, style: "event", instance: e.instance, parent: commandAbove(e.cause), ignored: false, what: { event: e.event },
+          label: by ? `${e.event} [${by}]` : e.event, style: "event", instance: e.instance, parent: commandAbove(e.cause), ignored: false,
+          what: { event: e.event, ...(by ? { choice: { by, among } } : {}) },
         });
       }
     }
@@ -521,7 +533,12 @@ export function sequenceToMermaid(s: Sequence): string {
   const across = s.participants.length > 1 ? `${mid(s.participants[0]!)},${mid(s.participants[s.participants.length - 1]!)}` : mid(s.participants[0] ?? PERSON);
   const emit = (items: SequenceItem[], indent: string) => {
     for (const i of items) {
-      if (i.kind === "message") lines.push(`${indent}${mid(i.from)}${i.style === "command" ? "->>" : "--)"}${mid(i.to)}: ${i.label}${i.times ? ` ×${i.times}` : ""}`);
+      if (i.kind === "message" && i.choice) {
+        // A receiver chosen by the payload (ADR 0031): the branch taken, as an alt frame.
+        lines.push(`${indent}alt ${i.choice.by} — one of ${i.choice.among.join(", ")}`);
+        lines.push(`${indent}  ${mid(i.from)}${i.style === "command" ? "->>" : "--)"}${mid(i.to)}: ${i.label}${i.times ? ` ×${i.times}` : ""}`);
+        lines.push(`${indent}end`);
+      } else if (i.kind === "message") lines.push(`${indent}${mid(i.from)}${i.style === "command" ? "->>" : "--)"}${mid(i.to)}: ${i.label}${i.times ? ` ×${i.times}` : ""}`);
       else if (i.kind === "note") lines.push(`${indent}Note over ${mid(i.over)}: ${i.text}`);
       else if (i.frame === "loop" || i.frame === "repeat") {
         lines.push(`${indent}loop ${i.label}`);

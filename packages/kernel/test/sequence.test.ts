@@ -58,7 +58,7 @@ test("a run in causal order: each arrow, the steps it set off inside, then what 
     "system:Scanners → system:Lab: Sample.Scan",
     "[2 steps inside Lab]",
     "system:Lab → system:Patient portal: Collected → PatientView.Collected",
-    "system:Patient portal → system:Messaging: PatientInformed",
+    "system:Patient portal → system:Messaging: PatientInformed [about = collected]",
   ]);
   assert.ok(!s.participants.includes("system:Hospital information system"), "only in the folded set-up");
   assert.ok(messages(s).some((m) => m.from === PERSON && m.label.endsWith(".Confirm")), "a deviation confirmed by lab staff: no system sends it");
@@ -87,9 +87,26 @@ test("one lifeline opened, the others whole: the Lab's sub-systems talk, the ven
   assert.equal(mine[mine.length - 1]! - mine[0]!, mine.length - 1);
   // A policy commands aggregates (ADR 0012 §4); what an aggregate then sends its own entities is inside it.
   const deep = sequence("02-haemolysed-at-the-lab", at("aggregate"));
-  for (const m of messages(deep)) assert.notEqual(deep.lifelines[m.to]!.kind, "subsystem", `${m.label}: an aggregate opens no further`);
+  for (const m of messages(deep)) assert.ok(deep.lifelines[m.to]!.kind !== "subsystem" || deep.lifelines[m.to]!.external, `${m.label}: an aggregate opens no further`);
   assert.ok(!messages(deep).some((m) => m.style === "event" && (m.label.endsWith(".Plan") || m.label.endsWith(".Expect"))));
   assert.match(sequenceToMermaid(s), /box transparent Diagnostics \/ Lab/);
+});
+
+test("an event told to the part its payload chooses (ADR 0031): only that one, and the arrow says it is a choice", () => {
+  const s = sequence("01-two-tubes-to-the-lab", { ...at("system", ["system:Messaging"]), toggled: ["setup"] });
+  const told = messages(s).filter((m) => m.event === "PatientInformed");
+  // The updates on the way by text, the order and the results by e-mail: each to one part, never both.
+  assert.deepEqual(told.map((m) => `${m.to}: ${m.label}`), [
+    "subsystem:Messaging/Mail service: PatientInformed [about = ordered]",
+    "subsystem:Messaging/Text gateway: PatientInformed [about = collected]",
+    "subsystem:Messaging/Text gateway: PatientInformed [about = in transit]",
+    "subsystem:Messaging/Text gateway: PatientInformed [about = at the lab]",
+    "subsystem:Messaging/Mail service: PatientInformed [about = results ready]",
+  ]);
+  assert.deepEqual(told[0]!.choice, { by: "about = ordered", among: ["Text gateway", "Mail service"] });
+  assert.match(sequenceToMermaid(s), /alt about = ordered — one of Text gateway, Mail service\n\s+\S+--\)subsystem_Messaging_Mail_service: PatientInformed \[about = ordered\]\n\s+end/);
+  // An event every receiver hears whatever it carries is no choice.
+  assert.ok(messages(s).filter((m) => m.event && m.event !== "PatientInformed").every((m) => m.choice === undefined));
 });
 
 test("a vendor opened into its parts (ADR 0020 §3, §4): the payload says which part sent a scan", () => {

@@ -79,6 +79,8 @@ export interface SubsystemDef {
   receives?: string[];
   /** ADR 0027: the roles it plays — it sends and receives what they do. */
   plays?: string[];
+  /** ADR 0031: the events it receives only when raised with these values — by event, then field. */
+  receivesWhere?: Record<string, Record<string, string[]>>;
   /** ADR 0030: what a part of our own works out itself, which the model does not run — a scenario sends the result in its name. */
   computes?: SystemSendDef[];
   note?: string;

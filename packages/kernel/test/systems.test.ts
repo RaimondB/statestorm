@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { loadModel } from "../src/model.ts";
-import { contextMap, contextMapToMermaid, placeOf, scopesOf, senderOfCommand } from "../src/systems.ts";
+import { choiceOfEvent, contextMap, contextMapToMermaid, placeOf, receiversOfEvent, scopesOf, senderOfCommand } from "../src/systems.ts";
 
 // ADR 0018 and ADR 0020, on the lab example: one system of its own in three sub-systems, a vendor's
 // patient portal that runs what the model specifies, a scanner vendor in three parts, two domains.
@@ -44,6 +44,19 @@ test("the loader holds the names: packages, sub-systems, commands, events, patte
   refused("systems:\n  A: { packages: [Steps] }\ncontexts:\n  Lonely: { team: x }", /contexts.Lonely: no sub-system is in this context/);
 });
 
+test("a part receives an event narrowed by its payload (ADR 0031): only those values; a choice among its receivers", () => {
+  const names = (about: string) => receiversOfEvent(lab, "PatientInformed", { about }).map((p) => p.name);
+  assert.deepEqual(names("collected"), ["Text gateway"]);
+  assert.deepEqual(names("results ready"), ["Mail service"]);
+  assert.deepEqual(names("something else"), [], "a value no part takes: told to none");
+  assert.deepEqual(choiceOfEvent(lab, "PatientInformed").fields, ["about"]);
+  assert.deepEqual(choiceOfEvent(lab, "RequestCreated"), { fields: [], among: [] }, "heard whatever it carries: no choice");
+  const refused = (yaml: string, message: RegExp) => assert.throws(() => loadModel(withSystems(yaml)), message);
+  refused("systems:\n  A: { packages: [Steps] }\n  X: { external: true, receives: [{ PatientInformed: { colour: [red] } }] }", /PatientInformed is raised with no field `colour` \(it has about\)/);
+  refused("systems:\n  A: { packages: [Steps] }\n  X: { external: true, receives: [{ PatientInformed: {} }] }", /narrow it by a field, or write it plain/);
+  refused("systems:\n  A: { packages: [Steps] }\n  X: { external: true, receives: [PatientInformed, PatientInformed] }", /`PatientInformed` is listed twice/);
+});
+
 test("a part of our own works a command out itself (ADR 0030): its sender, never a person's; one sender", () => {
   // Lab's Ordering works out which step of a route follows which: the scenario sends the links in its name.
   assert.equal(senderOfCommand(lab, "Route", "Link", {})?.name, "Ordering");
@@ -74,7 +87,7 @@ test("the context map: an edge where a policy carries an event across, and the e
   assert.ok(edge("Lab", "Patient portal")!.events.includes("RequestCreated"));
   assert.deepEqual(edge("Lab", "Patient portal")!.patterns, ["customer-supplier"]);
   assert.deepEqual(edge("Scanners", "Lab")!.commands, ["Sample.Scan"], "a command is said with its type (ADR 0020 §6)");
-  assert.deepEqual(edge("Patient portal", "Messaging")!.events, ["PatientInformed"]);
+  assert.deepEqual(edge("Patient portal", "Messaging")!.events, ["PatientInformed"], "told to one of its parts, by the payload: still one edge");
   assert.equal(edge("Patient portal", "Lab"), undefined, "the portal tells the lab nothing");
 
   const ctx = contextMap(lab, "context");
@@ -84,8 +97,8 @@ test("the context map: an edge where a policy carries an event across, and the e
   const inside = contextMap(lab, "subsystem", "Lab");
   assert.deepEqual(inside.nodes.filter((n) => n.kind === "subsystem").map((n) => n.id), ["Ordering", "Logistics", "Bench"]);
   assert.ok(inside.nodes.some((n) => n.id === "Patient portal" && n.kind === "external"), "the other systems as wholes");
-  assert.throws(() => contextMap(lab, "subsystem", "Messaging"), /needs a system as its scope/);
-  assert.deepEqual(scopesOf(lab), ["Lab", "Scanners"], "ours, and a vendor in parts");
+  assert.throws(() => contextMap(lab, "subsystem", "Patient portal"), /needs a system as its scope/);
+  assert.deepEqual(scopesOf(lab), ["Lab", "Scanners", "Messaging"], "ours, and the vendors in parts");
   assert.match(contextMapToMermaid(sys), /Lab -->\|"«customer-supplier», RequestCreated/);
 });
 

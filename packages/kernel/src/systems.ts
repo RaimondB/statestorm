@@ -52,6 +52,54 @@ export function eventsRaisedBy(m: MachineDef): Set<string> {
   return out;
 }
 
+/** The fields an event is raised with, anywhere in the model — what a receiver may be narrowed by. */
+function fieldsOfEvent(model: Model, event: string): Set<string> {
+  const out = new Set<string>();
+  for (const m of Object.values(model.aggregates)) {
+    for (const t of transitionsOf(m)) for (const e of t.emit) if (e.event === event) for (const f of Object.keys(e.payload)) out.add(f);
+    walkStates(m.states, (st) => { for (const e of [...st.emitOnEntry, ...st.emitOnExit]) if (e.event === event) for (const f of Object.keys(e.payload)) out.add(f); });
+  }
+  return out;
+}
+
+/**
+ * `Event`, or `{ Event: { field: [values] } }` — what one external part receives, narrowed by the
+ * event's payload where several parts share it (ADR 0031).
+ */
+function receivesOf(raw: unknown, where: string, model: Model, raised: Set<string>): { events: string[]; narrowed: Record<string, Record<string, string[]>> } {
+  const events: string[] = [];
+  const narrowed: Record<string, Record<string, string[]>> = {};
+  if (raw === undefined || raw === null) return { events, narrowed };
+  if (!Array.isArray(raw)) throw new SystemsError(`${where}: expected a list`);
+  for (const item of raw) {
+    let name: string;
+    let by: Raw | undefined;
+    if (typeof item === "string") name = item;
+    else {
+      const rec = record(item, where);
+      const keys = Object.keys(rec);
+      if (keys.length !== 1) throw new SystemsError(`${where}: write \`Event\`, or \`{ Event: { field: [values] } }\``);
+      name = keys[0]!;
+      by = record(rec[name], `${where}: ${name}`);
+    }
+    if (!raised.has(name)) throw new SystemsError(`${where}: no type of the model raises \`${name}\``);
+    if (events.includes(name)) throw new SystemsError(`${where}: \`${name}\` is listed twice`);
+    events.push(name);
+    if (!by) continue;
+    const fields = fieldsOfEvent(model, name);
+    const whereBy: Record<string, string[]> = {};
+    for (const [field, values] of Object.entries(by)) {
+      if (!fields.has(field)) throw new SystemsError(`${where}: ${name} is raised with no field \`${field}\` (it has ${[...fields].join(", ") || "none"})`);
+      const vs = Array.isArray(values) ? values.map(String) : [String(values)];
+      if (vs.length === 0) throw new SystemsError(`${where}: ${name}.${field} — name the values it is received with`);
+      whereBy[field] = vs;
+    }
+    if (Object.keys(whereBy).length === 0) throw new SystemsError(`${where}: ${name} — narrow it by a field, or write it plain`);
+    narrowed[name] = whereBy;
+  }
+  return { events, narrowed };
+}
+
 /** The commands a type answers: its creators and every command any of its states handles. */
 export function commandsAnsweredBy(m: MachineDef): Set<string> {
   const out = new Set(m.creators);
@@ -176,8 +224,8 @@ export function systemsOf(rawSystems: unknown, rawContexts: unknown, rawRelation
         packageHome.set(p, sub);
       }
       const played = external ? plays(sb.plays, `${sw}.plays`) : [];
-      const subReceivesOwn = external ? list(sb.receives, `${sw}.receives`) : [];
-      for (const e of subReceivesOwn) if (!raised.has(e)) throw new SystemsError(`${sw}.receives: no type of the model raises \`${e}\``);
+      const told = external ? receivesOf(sb.receives, `${sw}.receives`, model, raised) : { events: [], narrowed: {} };
+      const subReceivesOwn = told.events;
       // A part sends and receives what the roles it plays do (ADR 0027 §2), beside its own.
       const subSends = external ? [...sendsOf(sb.sends, `${sw}.sends`, sub, model), ...played.flatMap((r) => r.sends.map((x) => ({ ...x, subsystem: sub })))] : [];
       const subReceives = [...new Set([...subReceivesOwn, ...played.flatMap((r) => r.receives)])];
@@ -193,6 +241,7 @@ export function systemsOf(rawSystems: unknown, rawContexts: unknown, rawRelation
         name: sub, system: name, context: !external && sb.context !== undefined ? String(sb.context) : context, packages,
         ...(external ? { external: true, sends: subSends, receives: subReceives } : {}),
         ...(subComputes.length ? { computes: subComputes } : {}),
+        ...(Object.keys(told.narrowed).length ? { receivesWhere: told.narrowed } : {}),
         ...(played.length ? { plays: played.map((r) => r.name) } : {}),
         ...(sb.note !== undefined ? { note: String(sb.note) } : {}),
         ...(why(sb.why) ? { why: why(sb.why)! } : {}),
@@ -519,6 +568,25 @@ export function contextMap(model: Model, level: Level, scope?: string): ContextM
 function sendMatches(s: SystemSendDef, type: string, command: string, payload: Record<string, Json>): boolean {
   return s.type === type && s.command === command &&
     Object.entries(s.where ?? {}).every(([field, values]) => values.includes(String(payload[field])));
+}
+
+/**
+ * The external parts told of this event, raised with this payload (ADR 0020, ADR 0031): every part that
+ * receives it, where a part narrows it by the payload only when the payload matches.
+ */
+export function receiversOfEvent(model: Model, event: string, payload: Record<string, Json>): SubsystemDef[] {
+  return (model.systems?.subsystems ?? []).filter((p) => p.external && (p.receives ?? []).includes(event) &&
+    Object.entries(p.receivesWhere?.[event] ?? {}).every(([field, values]) => values.includes(String(payload[field]))));
+}
+
+/**
+ * Whether the parts told of an event are chosen by its payload (ADR 0031): the fields some part narrows
+ * it by, and every part that could be told — empty when every receiver hears it whatever it carries.
+ */
+export function choiceOfEvent(model: Model, event: string): { fields: string[]; among: SubsystemDef[] } {
+  const among = (model.systems?.subsystems ?? []).filter((p) => p.external && (p.receives ?? []).includes(event));
+  const fields = [...new Set(among.flatMap((p) => Object.keys(p.receivesWhere?.[event] ?? {})))];
+  return { fields, among: fields.length ? among : [] };
 }
 
 /**

@@ -83,10 +83,14 @@ systems:
       Clinic app:    { plays: [Collecting] }
       Courier app:   { plays: [Carrying] }
       Bench scanner: { plays: [Testing] }
+  # Which part tells the patient is chosen by what the message is about (ADR 0031): the updates on the
+  # way go by text, the order and its outcome by e-mail.
   Messaging:
     external: true
     note: texts and e-mails to the patient
-    receives: [PatientInformed]
+    subsystems:
+      Text gateway: { receives: [{ PatientInformed: { about: [collected, in transit, at the lab] } }] }
+      Mail service: { receives: [{ PatientInformed: { about: [ordered, results ready, a new sample is needed] } }] }
 
 # Who works each step, by what it does and the scans it sends — whoever does it (ADR 0027).
 roles:
