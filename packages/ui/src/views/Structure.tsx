@@ -28,6 +28,23 @@ interface Props {
  * the many end), who points at whom (dashed), who refines whom (hollow triangle). What a box
  * lists is what its type declares; inherited fields are on the supertype.
  */
+/**
+ * A layout is made once per model and set of options: ELK takes the better part of a second on a large
+ * model, and opening the view again, or switching an option back, need not wait for it again.
+ */
+const layouts = new WeakMap<Model, Map<string, Promise<ErdLayout>>>();
+function layoutOnce(model: Model, structure: ReturnType<typeof structureOf>, options: ErdOptions): Promise<ErdLayout> {
+  const byModel = layouts.get(model) ?? layouts.set(model, new Map()).get(model)!;
+  const key = JSON.stringify(options);
+  let made = byModel.get(key);
+  if (!made) {
+    made = layoutErd(structure, options, measure);
+    made.catch(() => byModel.delete(key));   // a layout that failed is tried again next time
+    byModel.set(key, made);
+  }
+  return made;
+}
+
 export function Structure({ model, frame, focus, onFocus: setFocus }: Props) {
   const structure = useMemo(() => structureOf(model), [model]);
   const [options, setOptions] = useState<ErdOptions>(DEFAULT_ERD);
@@ -35,7 +52,7 @@ export function Structure({ model, frame, focus, onFocus: setFocus }: Props) {
   const [error, setError] = useState<string>();
   useEffect(() => {
     let live = true;
-    layoutErd(structure, options, measure).then(
+    layoutOnce(model, structure, options).then(
       (l) => { if (live) { setLayout(l); setError(undefined); } },
       (err) => { if (live) setError(String(err)); },
     );

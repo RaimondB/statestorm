@@ -1,7 +1,7 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Model } from "@statestorm/kernel";
-import { parseScenario } from "@statestorm/scenarios";
-import { actionsOf, frameOfEntry, logOf, type Run } from "../session.ts";
+import { frameOfEntry, type Run } from "../session.ts";
+import { madeCount, madeRuns, makeRuns } from "../runs.ts";
 import type { Selection } from "../selection.ts";
 import { buildFlow, flowConfig, layoutFlow, NODE, tagsOf, trailOf } from "../flow.ts";
 import { overviewConfig, spoken } from "../overview.ts";
@@ -60,15 +60,16 @@ const KIND: Record<string, string> = {
 export function Flow({ model, run, index, scenarios, setups, drawings, groups, issues, select, onIndex }: Props) {
   const overview = useMemo(() => overviewConfig(model).config, [model]);
   const { flow, errors } = useMemo(() => flowConfig(model), [model]);
-  // Every scenario's run, read once per model: the arrows are what they showed.
-  const logs = useMemo(() => new Map(scenarios.flatMap((s) => {
-    try {
-      const sc = parseScenario(s.text, s.file, (p) => setups?.[p]);
-      return [[s.file, logOf(model, actionsOf(sc), { kind: "fifo" }, sc.given.at)] as const];
-    } catch {
-      return [];
-    }
-  })), [model, scenarios, setups]);
+  // Every scenario's run: the arrows are what they showed. Made once per model (runs.ts), a slice at a
+  // time — the board shows what is made, and fills in as the rest come.
+  const [made, setMade] = useState(() => madeCount(model, setups, scenarios));
+  useEffect(() => {
+    setMade(madeCount(model, setups, scenarios));
+    const job = makeRuns(model, setups, scenarios, () => setMade(madeCount(model, setups, scenarios)));
+    return job.cancel;
+  }, [model, scenarios, setups]);
+  const logs = useMemo(() => madeRuns(model, setups, scenarios), [model, scenarios, setups, made]);
+  const reading = made < scenarios.length;
 
   const [choice, setChoice] = useState<Choice>(readChoice);
   const choose = (c: Choice) => {
@@ -157,6 +158,11 @@ export function Flow({ model, run, index, scenarios, setups, drawings, groups, i
               {drawings.map((d) => <option key={d.file} value={d.file.replace(/\.yaml$/, "")}>{d.title}</option>)}
             </select>
           </label>
+        )}
+        {reading && source !== "run" && (
+          <span className="hint" title="The scenarios are run once, a few at a time; the board fills in as they come">
+            reading the scenarios… {made} of {scenarios.length}
+          </span>
         )}
         {trail.subjects.length > 1 && (
           <label className="hint">follow{" "}

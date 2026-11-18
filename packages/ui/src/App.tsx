@@ -28,6 +28,7 @@ import { assignScenarios, parseDrawing, parseIssues } from "./check/drawings.ts"
 import { ScenarioPicker } from "./views/ScenarioPicker.tsx";
 import { AgendaBar } from "./views/AgendaBar.tsx";
 import { parseAgenda, stepsOf, type Agenda } from "./agenda.ts";
+import { warmRuns } from "./runs.ts";
 import { referencesOf, scenarioGroups, tagGroups, tagMatches } from "./groups.ts";
 
 const NO_SCENARIOS: { file: string; text: string }[] = [];
@@ -228,6 +229,12 @@ export function App() {
     ignored: seqChoice.ignored,
   };
   const chooseSeq = (next: SequenceState) => setSeqChoice({ ...next, example: exampleName, scenario: scenario?.file });
+  // The domain's scenarios run while the browser is idle, so a view that reads them all (Flow) is ready
+  // when it is opened, and the page never waits on them.
+  useEffect(() => {
+    if (!model || !example || example.scenarios.length === 0) return;
+    return warmRuns(model, example.setups, example.scenarios).cancel;
+  }, [model, example]);
   // Each scenario names the drawing it walks (MC-14); a scenario that does not parse is on none.
   const walkers = useMemo(() => (example?.scenarios ?? []).map((s) => {
     try {

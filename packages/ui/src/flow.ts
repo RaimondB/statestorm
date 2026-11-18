@@ -234,24 +234,51 @@ function effectOf(model: Model, byCause: Map<number, LogEntry[]>, seq: number): 
   return best;
 }
 
+/** What one run puts on the board: its events with their tone, what it left off, and its arrows. */
+interface RunFacts {
+  events: { id: string; event: string; lane: string; tone: Tone }[];
+  left: string[];
+  arrows: [string, string][];
+}
+
+/**
+ * A run's facts depend only on the run and the model's settings, so they are read once and kept:
+ * the board is rebuilt each time more runs come in (runs.ts), and only the counting is done again.
+ */
+const factsCache = new WeakMap<LogEntry[], { model: Model; overview: OverviewConfig; flow: FlowConfig; length: number; facts: RunFacts }>();
+
+function factsOf(model: Model, overview: OverviewConfig, flow: FlowConfig, log: LogEntry[]): RunFacts {
+  const kept = factsCache.get(log);
+  // A run on screen may grow where it stands, as a command is fired: its length says it has.
+  if (kept && kept.model === model && kept.overview === overview && kept.flow === flow && kept.length === log.length) return kept.facts;
+  const byCause = causes(log);
+  const { events, left } = subjectEvents(model, overview, flow, log);
+  const facts: RunFacts = {
+    events: events.map((e) => ({ id: e.id, event: e.event, lane: e.lane, tone: effectOf(model, byCause, e.seq) })),
+    left: [...left],
+    arrows: [...arrowsOf(log, events)],
+  };
+  factsCache.set(log, { model, overview, flow, length: log.length, facts });
+  return facts;
+}
+
 export function buildFlow(model: Model, overview: OverviewConfig, flow: FlowConfig, logs: LogEntry[][]): FlowGraph {
   const nodes = new Map<string, FlowNode>();
   const edges = new Map<string, FlowEdge>();
   const left = new Set<string>();
   const laneOrder: string[] = flow.lanes ? flow.lanes.map((l) => l.name) : [];
   for (const log of logs) {
-    const byCause = causes(log);
-    const { events, left: l } = subjectEvents(model, overview, flow, log);
-    for (const x of l) left.add(x);
-    for (const e of events) {
+    const facts = factsOf(model, overview, flow, log);
+    for (const x of facts.left) left.add(x);
+    for (const e of facts.events) {
       if (!laneOrder.includes(e.lane)) laneOrder.push(e.lane);
-      const tone = effectOf(model, byCause, e.seq);
+      const tone = e.tone;
       const node = nodes.get(e.id) ?? { id: e.id, event: e.event, lane: e.lane, count: 0, tone: "neutral" as Tone };
       node.count++;
       if (RANK[tone] > RANK[node.tone]) node.tone = tone === "partial" ? "done" : tone;
       nodes.set(e.id, node);
     }
-    for (const [from, to] of arrowsOf(log, events)) {
+    for (const [from, to] of facts.arrows) {
       const k = `${from}→${to}`;
       const edge = edges.get(k) ?? { from, to, count: 0 };
       edge.count++;
