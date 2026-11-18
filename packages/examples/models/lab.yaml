@@ -58,7 +58,9 @@ systems:
     note: the lab's own system — the doctor's request, the samples on their way, the bench
     domain: Diagnostics
     subsystems:
-      Ordering:  { context: Requests, packages: [Requests, Steps], note: the request and its route }
+      # Which step of a route follows which is worked out here, from the route — logic the model does
+      # not run: a scenario sends the links in its name, drawn as a step inside Ordering (ADR 0030).
+      Ordering:  { context: Requests, packages: [Requests, Steps], computes: [Route.Link], note: the request and its route }
       Logistics: { context: Sample logistics, packages: [Sites, Transfers, Samples, Deviations] }
       Bench:     { context: Testing, packages: [Analysis] }
   # A vendor's portal: what it shows the patient is specified here, and runs there (ADR 0020 §2).
@@ -71,7 +73,7 @@ systems:
     external: true
     domain: Hospital
     note: the hospital's own system, where the doctor orders
-    sends: [Request.Create, Route.Plan, Route.Link, Route.Instruct, SiteVisit.Plan, CourierRun.Plan, TubeRun.Plan, Analysis.Plan]
+    sends: [Request.Create, Route.Plan, Route.Instruct, SiteVisit.Plan, CourierRun.Plan, TubeRun.Plan, Analysis.Plan]
   # One vendor, three parts, each sending its own scans (ADR 0020 §3, §4) — the role it plays
   # (ADR 0027): another vendor's app sending the same scans could take its place.
   Scanners:

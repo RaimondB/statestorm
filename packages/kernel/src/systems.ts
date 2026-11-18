@@ -145,25 +145,27 @@ export function systemsOf(rawSystems: unknown, rawContexts: unknown, rawRelation
   for (const [name, body] of Object.entries(record(rawSystems, "systems"))) {
     const where = `systems.${name}`;
     const rec = record(body, where);
-    only(rec, ["note", "external", "domain", "sends", "receives", "plays", "context", "subsystems", "packages", "why"], where);
+    only(rec, ["note", "external", "domain", "sends", "receives", "plays", "computes", "context", "subsystems", "packages", "why"], where);
     const external = rec.external === true;
     if (names.has(name)) throw new SystemsError(`${where}: the name is used twice`);
     names.add(name);
     if (external && rec.context !== undefined) throw new SystemsError(`${where}: an external system is a context of its own — it has no \`context\``);
     if (!external) for (const k of ["sends", "receives", "plays"]) if (rec[k] !== undefined) throw new SystemsError(`${where}: \`${k}\` is for an external system`);
+    if (external && rec.computes !== undefined) throw new SystemsError(`${where}: \`computes\` is for a system of its own — an external system \`sends\` (ADR 0030)`);
+    if (rec.subsystems !== undefined && rec.computes !== undefined) throw new SystemsError(`${where}: \`computes\` — a system with sub-systems says it on each (ADR 0030)`);
     if (rec.subsystems !== undefined && rec.packages !== undefined) throw new SystemsError(`${where}: list \`subsystems\`, or \`packages\` for a system of one sub-system — not both`);
     if (external && rec.subsystems !== undefined) for (const k of ["sends", "receives", "plays"]) if (rec[k] !== undefined) throw new SystemsError(`${where}: \`${k}\` — an external system with sub-systems says it on each`);
     const context = external ? name : rec.context !== undefined ? String(rec.context) : name;
     const split = rec.subsystems !== undefined;
     const parts: [string, Raw][] = split
       ? Object.entries(record(rec.subsystems, `${where}.subsystems`)).map(([n, b]) => [n, Array.isArray(b) ? { packages: b } : record(b, `${where}.subsystems.${n}`)])
-      : [[name, { packages: rec.packages, sends: rec.sends, receives: rec.receives, plays: rec.plays }]];
+      : [[name, { packages: rec.packages, sends: rec.sends, receives: rec.receives, plays: rec.plays, computes: rec.computes }]];
     if (parts.length === 0) throw new SystemsError(`${where}: list its \`subsystems\`, or leave the key out`);
     const sends: SystemSendDef[] = [];
     const receives: string[] = [];
     for (const [sub, sb] of parts) {
       const sw = split ? `${where}.subsystems.${sub}` : where;
-      if (split) only(sb, external ? ["note", "packages", "sends", "receives", "plays", "why"] : ["note", "context", "packages", "why"], sw);
+      if (split) only(sb, external ? ["note", "packages", "sends", "receives", "plays", "why"] : ["note", "context", "packages", "computes", "why"], sw);
       if (split && names.has(sub) && sub !== name) throw new SystemsError(`${sw}: the name is used twice`);
       if (sub !== name) names.add(sub);
       const packages = list(sb.packages, `${sw}.packages`);
@@ -179,6 +181,9 @@ export function systemsOf(rawSystems: unknown, rawContexts: unknown, rawRelation
       // A part sends and receives what the roles it plays do (ADR 0027 §2), beside its own.
       const subSends = external ? [...sendsOf(sb.sends, `${sw}.sends`, sub, model), ...played.flatMap((r) => r.sends.map((x) => ({ ...x, subsystem: sub })))] : [];
       const subReceives = [...new Set([...subReceivesOwn, ...played.flatMap((r) => r.receives)])];
+      // What a part of our own works out itself, which the model does not run: a scenario sends the
+      // result in its name (ADR 0030).
+      const subComputes = external ? [] : sendsOf(sb.computes, `${sw}.computes`, sub, model);
       if (external && packages.length === 0 && subSends.length === 0 && subReceives.length === 0) {
         throw new SystemsError(`${sw}: an external system says what it \`sends\` into the model or \`receives\` from it, or the \`packages\` it runs for it`);
       }
@@ -187,6 +192,7 @@ export function systemsOf(rawSystems: unknown, rawContexts: unknown, rawRelation
       subsystems.push({
         name: sub, system: name, context: !external && sb.context !== undefined ? String(sb.context) : context, packages,
         ...(external ? { external: true, sends: subSends, receives: subReceives } : {}),
+        ...(subComputes.length ? { computes: subComputes } : {}),
         ...(played.length ? { plays: played.map((r) => r.name) } : {}),
         ...(sb.note !== undefined ? { note: String(sb.note) } : {}),
         ...(why(sb.why) ? { why: why(sb.why)! } : {}),
@@ -237,6 +243,14 @@ export function systemsOf(rawSystems: unknown, rawContexts: unknown, rawRelation
     relations.push({ upstream: String(rec.upstream), downstream: String(rec.downstream), pattern: pattern as RelationDef["pattern"], ...(rec.note !== undefined ? { note: String(rec.note) } : {}), ...(why(rec.why) ? { why: why(rec.why)! } : {}) });
   }
   for (const r of roles) if (names.has(r.name)) throw new SystemsError(`role ${r.name}: the name is also a system's or a sub-system's`);
+  // A command worked out inside a part has that part as its one sender (ADR 0030 §2).
+  const outside = [...subsystems.flatMap((p) => (p.sends ?? []).map((x) => ({ x, by: `${p.system === p.name ? p.name : `${p.system}/${p.name}`}` }))), ...roles.flatMap((r) => r.sends.map((x) => ({ x, by: `role ${r.name}` })))];
+  const computed = subsystems.flatMap((p) => (p.computes ?? []).map((x) => ({ x, by: p.system === p.name ? p.name : `${p.system}/${p.name}` })));
+  for (const [i, a] of computed.entries()) {
+    for (const b of [...outside, ...computed.slice(i + 1)]) if (overlap(a.x, b.x)) {
+      throw new SystemsError(`systems: ${a.x.type}.${a.x.command} is worked out inside ${a.by} and sent by ${b.by} too, with values that can be the same — one sender (ADR 0030)`);
+    }
+  }
   return { systems, subsystems, domains, contexts, relations, roles };
 }
 
@@ -509,10 +523,12 @@ function sendMatches(s: SystemSendDef, type: string, command: string, payload: R
 
 /**
  * The external part that sends this command with this payload: the first whose declaration matches
- * (ADR 0020 §4), a plain `Type.Command` matching any payload. Undefined: a person sends it.
+ * (ADR 0020 §4), a plain `Type.Command` matching any payload — or the part of our own that works it
+ * out itself (ADR 0030). Undefined: a person sends it.
  */
 export function senderOfCommand(model: Model, type: string, command: string, payload: Record<string, Json>): SubsystemDef | undefined {
-  return model.systems?.subsystems.find((p) => p.external && (p.sends ?? []).some((s) => sendMatches(s, type, command, payload)));
+  return model.systems?.subsystems.find((p) => (p.external && (p.sends ?? []).some((s) => sendMatches(s, type, command, payload)))
+    || (p.computes ?? []).some((s) => sendMatches(s, type, command, payload)));
 }
 
 /** ADR 0027 §3: the role whose contract holds this command with this payload — undefined: no role sends it. */

@@ -66,6 +66,11 @@ test("a run in causal order: each arrow, the steps it set off inside, then what 
 
   const open = sequence("02-haemolysed-at-the-lab", { ...at("system"), toggled: ["setup"] });
   assert.ok(said(messages(open)).includes("system:Hospital information system → system:Lab: Request.Create"));
+  // What the lab's Ordering works out itself is a step inside it, never from a person (ADR 0030).
+  const links = (view: SequenceView) => messages(sequence("01-two-tubes-to-the-lab", { ...view, toggled: ["setup"] })).filter((m) => m.label === "Route.Link");
+  assert.deepEqual([...new Set(links(at("system")).map((m) => `${m.from} → ${m.to}`))], ["system:Lab → system:Lab"]);
+  assert.deepEqual([...new Set(links(at("system", ["system:Lab"])).map((m) => `${m.from} → ${m.to}`))], ["subsystem:Lab/Ordering → subsystem:Lab/Ordering"]);
+  assert.deepEqual([...new Set(links(at("system", ["system:Lab", "subsystem:Lab/Ordering"])).map((m) => `${m.from} → ${m.to}`))], ["aggregate:Route → aggregate:Route"]);
   const mermaid = sequenceToMermaid(s);
   assert.match(mermaid, /box transparent Diagnostics\n  participant system_Lab as Lab\n  participant system_Patient_portal as Patient portal\n  end/);
   assert.match(mermaid, /Note over [^:]+: ▸ set-up · 12 messages, folded/);

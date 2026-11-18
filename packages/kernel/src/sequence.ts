@@ -324,6 +324,12 @@ export function sequenceOf(model: Model, log: LogEntry[], view: SequenceView, ma
     return reachable(lines, `subsystem:${p.system}/${p.subsystem}`) ? `subsystem:${p.system}/${p.subsystem}` : `system:${p.system}`;
   };
   const leafOfPart = (p: SubsystemDef): string => (reachable(lines, `subsystem:${p.system}/${p.name}`) ? `subsystem:${p.system}/${p.name}` : `system:${p.system}`);
+  // A part of our own that works an input out itself (ADR 0030) opens into its aggregates: opened, the
+  // input is a step on the lifeline it reaches — inside the part, never from a person.
+  const fromPart = (p: SubsystemDef, to: string): string => {
+    const at = visible(leafOfPart(p));
+    return !p.external && open.has(at) && (nodes[at]?.children.length ?? 0) > 0 ? to : at;
+  };
 
   // Which arrows cross, at this opening.
   const facts = factsOf(model, log);
@@ -335,7 +341,7 @@ export function sequenceOf(model: Model, log: LogEntry[], view: SequenceView, ma
   for (const f of facts) {
     if (f.kind !== "tell") parentOf.set(f.seq, f.parent);
     const to = visible(f.toPart ? leafOfPart(f.toPart) : leafOfType(f.toType!));
-    const from = f.kind === "input" ? (f.fromPart ? visible(leafOfPart(f.fromPart)) : PERSON) : visible(leafOfType(f.fromType!));
+    const from = f.kind === "input" ? (f.fromPart ? fromPart(f.fromPart, to) : PERSON) : visible(leafOfType(f.fromType!));
     const crosses = f.kind === "input" || from !== to;
     if (f.ignored && !view.ignored) { if (crosses) hiddenIgnored++; continue; }
     if (!crosses) {

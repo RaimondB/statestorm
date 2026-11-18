@@ -44,6 +44,20 @@ test("the loader holds the names: packages, sub-systems, commands, events, patte
   refused("systems:\n  A: { packages: [Steps] }\ncontexts:\n  Lonely: { team: x }", /contexts.Lonely: no sub-system is in this context/);
 });
 
+test("a part of our own works a command out itself (ADR 0030): its sender, never a person's; one sender", () => {
+  // Lab's Ordering works out which step of a route follows which: the scenario sends the links in its name.
+  assert.equal(senderOfCommand(lab, "Route", "Link", {})?.name, "Ordering");
+  assert.equal(senderOfCommand(lab, "Route", "Link", {})?.external, undefined);
+  assert.equal(senderOfCommand(lab, "Route", "Plan", {})?.name, "Hospital information system");
+  const refused = (yaml: string, message: RegExp) => assert.throws(() => loadModel(withSystems(yaml)), message);
+  refused("systems:\n  A: { packages: [Steps] }\n  X: { external: true, computes: [Route.Link] }", /`computes` is for a system of its own — an external system `sends`/);
+  refused("systems:\n  A: { computes: [Route.Link], subsystems: { P: { packages: [Steps] } } }", /a system with sub-systems says it on each/);
+  refused("systems:\n  A: { packages: [Steps], computes: [Route.Fly] }", /Route answers no command `Fly`/);
+  refused("systems:\n  A: { packages: [Steps], computes: [Route.Link] }\n  X: { external: true, sends: [Route.Link] }", /Route.Link is worked out inside A and sent by X too/);
+  // Narrowed apart by the payload, two senders of one command stand side by side.
+  assert.doesNotThrow(() => loadModel(withSystems("systems:\n  A: { packages: [Steps], computes: [{ Sample.Scan: { event: [Queued] } }] }\n  X: { external: true, sends: [{ Sample.Scan: { event: [Collected] } }] }")));
+});
+
 test("a type in no system, and a relation the model does not connect, are warnings", () => {
   const m = loadModel(withSystems("systems:\n  A: { packages: [Requests, Steps] }\n  B: { packages: [Patient] }\nrelations:\n  - { upstream: B, downstream: A, pattern: conformist }"));
   assert.ok(m.findings.some((f) => /in no system: .*SiteVisit/.test(f.message)));

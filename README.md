@@ -221,6 +221,10 @@ through time; what they change stays in their browser. The bundled examples are 
 - **A shared set-up** (ADR 0029): `given: include: [given/sites.yaml]` starts a scenario with the sends of
   a file in a folder below `scenarios/`, written once — the master data most scenarios need. A set-up holds
   `send:` and may include others; its sends come before the scenario's own.
+- **What a part of our own works out** (ADR 0030): `computes: [Route.Link]` on a sub-system of our own
+  says that a scenario sends that command for logic the model does not run, such as a calculation or a
+  search. The sequence draws it as a step inside that part, never from a person, and the inspector says
+  "worked out inside".
 - **The docs travel with it:** the domain's `docs/` sources — rules, glossary, questions, profile, the
   sessions' logs (not the generated rulebook) — go into the share, served site and *Open folder…* alike,
   for the **Docs** view (ADR 0016 §9): every topic and its rules, each rule linked to what cites it — a

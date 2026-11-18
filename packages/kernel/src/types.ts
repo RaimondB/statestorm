@@ -79,6 +79,8 @@ export interface SubsystemDef {
   receives?: string[];
   /** ADR 0027: the roles it plays — it sends and receives what they do. */
   plays?: string[];
+  /** ADR 0030: what a part of our own works out itself, which the model does not run — a scenario sends the result in its name. */
+  computes?: SystemSendDef[];
   note?: string;
   why?: string[];
 }
