@@ -268,7 +268,7 @@ export async function check(args: string[]): Promise<number> {
       kinds.set(key, (kinds.get(key) ?? false) || sent);
     }
     const byPerson = [...kinds].filter(([, sent]) => !sent).map(([k]) => k).sort();
-    for (const c of byPerson) say("info", `${c}: sent from outside by no external system — drawn as a person`);
+    for (const c of byPerson) say("info", `${c}: sent from outside by no external system, and worked out inside no part of its own — drawn as a person`);
     const spanning = sys.contexts.filter((c) => new Set(sys.subsystems.filter((s) => s.context === c.name).map((s) => s.system)).size > 1);
     for (const c of spanning) say("info", `context ${c.name} spans systems ${[...new Set(sys.subsystems.filter((s) => s.context === c.name).map((s) => s.system))].join(", ")}`);
     const ours = sys.subsystems.filter((s) => !s.external).length;

@@ -96,6 +96,7 @@ export function Inspector({ model, run, index, selection, select, onIndex, docs,
     const reacting = !policy && event ? Object.values(model.policies).filter((p) => allTransitions(p).some((t) => t.name.split("#")[0] === event)) : [];
     const outside = event ? (model.systems?.subsystems ?? []).filter((x) => (x.receives ?? []).includes(event)) : [];
     const senders = ctype && cname ? (model.systems?.subsystems ?? []).filter((x) => (x.sends ?? []).some((snd) => snd.type === ctype && snd.command === cname)) : [];
+    const computers = ctype && cname ? (model.systems?.subsystems ?? []).filter((x) => (x.computes ?? []).some((snd) => snd.type === ctype && snd.command === cname)) : [];
     return (
       <div>
         <span className="kind-tag">{event && command ? "event, and the command it became" : event ? "event" : "command"}</span>
@@ -119,6 +120,7 @@ export function Inspector({ model, run, index, selection, select, onIndex, docs,
           <h4><b style={{ color: "var(--command)" }}>▸ {command}</b></h4>
           <Terms name={command} />
           {senders.length > 0 && <div className="hint">sent from outside by {senders.map((x) => x.system === x.name ? x.name : `${x.system} (${x.name})`).join(", ")}</div>}
+          {computers.length > 0 && <div className="hint">worked out inside {computers.map((x) => x.system === x.name ? x.name : `${x.system} (${x.name})`).join(", ")} — the model does not run it; a scenario sends the result (ADR 0030)</div>}
           {handlers.length > 0 && <><div className="hint">handled in</div><ul>{handlers.map((t) => (
             <li key={t.id}><Link onClick={() => select({ kind: "transition", machine: ctype!, id: t.id })}>{ctype}.{t.ownerRef} on {t.name}</Link>
               {t.transition.guard ? <span className="hint"> if <code>{t.transition.guard}</code></span> : null}</li>
@@ -313,7 +315,7 @@ export function Inspector({ model, run, index, selection, select, onIndex, docs,
         <dl><dt>instance</dt><dd><Link onClick={() => select({ kind: "instance", key: entry.instance! })}>{entry.instance}</Link></dd></dl>
       )}
       {(sender || role) && (
-        <dl><dt>sent by</dt><dd>{sender ? sender.name : "a part"}{role ? <> as <b title={role.note ?? `role ${role.name} (ADR 0027)`}>{role.name}</b> — works {role.works.join(", ") || "nothing"}</> : null}</dd></dl>
+        <dl><dt>{sender && !sender.external ? "worked out inside" : "sent by"}</dt><dd>{sender ? sender.name : "a part"}{role ? <> as <b title={role.note ?? `role ${role.name} (ADR 0027)`}>{role.name}</b> — works {role.works.join(", ") || "nothing"}</> : null}</dd></dl>
       )}
       {"payload" in entry && entry.payload && Object.keys(entry.payload).length > 0 && (<>
         <h4>Payload</h4>
