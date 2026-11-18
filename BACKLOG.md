@@ -82,6 +82,19 @@ Status is one of `open`, `claimed — …`, `blocked — <on what>`.
 - **done when:** the page is usable while a large domain loads, as the Flow board already is while its
   runs are made (`runs.ts`); measured on a domain of about 200 scenarios.
 
+### B-17 Named overviews — a second picture of a run, nested by an id
+- **status:** claimed — agent, b17-named-overviews, 2026-11-18
+- **why:** a reader of the lab wants the van runs, not the requests: each run with the cool boxes
+  booked onto it, and in each box the samples of several requests, each named with its request. The
+  overview has one configuration, rooted at the request, and nests only an aggregate's own entities —
+  a box and a run are aggregates that name each other by an id, so they stand flat in the side lane.
+  And the box exists before any run is booked to it.
+- **done when:** `overview.views` declares further named overviews, each with the overview's keys and
+  `under:` (a parentless type nested under another by an id field it holds, standing on its own while
+  that field names nothing) and `badges: roots` (a folded child's badge names the main overview's roots
+  that carry its unit); the workbench switches between them (`overview=` in the link); `lab` scenario 12
+  shows it; ADR 0034.
+
 ## Later — on the roadmap, not yet started
 
 - **B-8 The board view:** EventStorming stickies laid out as a board, clickable to run before it is

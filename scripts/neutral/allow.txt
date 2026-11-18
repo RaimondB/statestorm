@@ -4,6 +4,7 @@
 # examples' words instead. A `term:` is for an ordinary word a domain happens to use as well.
 email: git@github.com
 email: noreply@anthropic.com
+email: 223556219+Copilot@users.noreply.github.com
 github: RaimondB
 
 # Ordinary words and abbreviations a domain happens to use too.
@@ -11,6 +12,7 @@ term: API
 term: CC
 term: comes back
 term: D-01
+term: Finance
 term: delivery order
 term: hand over
 term: left behind
