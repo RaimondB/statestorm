@@ -61,6 +61,8 @@ function saveChoice(c: Choice) {
  * over what this browser remembers; the address is kept current as the reader moves.
  */
 type Link = { choice?: Choice; view?: View; sequence?: Partial<SequenceState>; doc?: DocPlace; focus?: string; events?: EventsMode; lines?: string[];
+  /** A named overview (ADR 0034). */
+  overview?: string;
   /** An agenda (ADR 0025) and the step of it shown. */
   agenda?: { name: string; step: number } };
 function readLink(): Link {
@@ -78,6 +80,7 @@ function readLink(): Link {
       ...(q.get("focus") ? { focus: q.get("focus")! } : {}),
       ...(["statuses", "requests", "all"].includes(q.get("events") ?? "") ? { events: q.get("events") as EventsMode } : {}),
       ...(q.get("lines") ? { lines: q.get("lines")!.split(",").filter(Boolean) } : {}),
+      ...(q.get("overview") ? { overview: q.get("overview")! } : {}),
       ...(q.get("agenda") ? { agenda: { name: q.get("agenda")!, step: Math.max(0, Number(q.get("step") ?? 1) - 1) || 0 } } : {}),
     };
   } catch { return {}; }
@@ -141,6 +144,7 @@ export function App() {
   const [structureFocus, setStructureFocus] = useState<string | undefined>(link.focus);
   // Which events the overview shows (ADR 0023): the model's statuses, with its asks, or every event.
   const [eventsMode, setEventsMode] = useState<EventsMode>(link.events ?? "requests");
+  const [overviewName, setOverviewName] = useState<string | undefined>(link.overview);
   // The Journey's lines (ADR 0024), by their root's key: absent, the first few there are.
   const [journeyLines, setJourneyLines] = useState<string[] | undefined>(link.lines);
   // The agenda being walked (ADR 0025), and the step of it last chosen: both travel in the link.
@@ -398,6 +402,7 @@ export function App() {
     if (center === "structure" && structureFocus) q.set("focus", structureFocus);
     if ((center === "overview" || center === "journey") && eventsMode !== "requests") q.set("events", eventsMode);
     if (center === "journey" && journeyLines) q.set("lines", journeyLines.join(","));
+    if (center === "overview" && overviewName) q.set("overview", overviewName);
     if (center === "sequence") {
       if (seqState.open) q.set("open", seqState.open.join(","));
       if (seqState.toggled.length) q.set("toggled", seqState.toggled.join(","));
@@ -613,7 +618,8 @@ export function App() {
             {(center === "map" || center === "sequence") && model.systems
               ? (center === "map" ? <ContextMap model={model} select={selectAndFocus} /> : <Sequence model={model} run={run} index={index} onIndex={setIndex} state={seqState} onState={chooseSeq} select={selectAndFocus} />)
               : center === "overview" || center === "map" || center === "sequence"
-              ? <Overview model={model} run={run} index={index} since={from} selection={selection} select={select} onIndex={setIndex} eventsMode={eventsMode} onEventsMode={setEventsMode} />
+              ? <Overview model={model} run={run} index={index} since={from} selection={selection} select={select} onIndex={setIndex} eventsMode={eventsMode} onEventsMode={setEventsMode}
+                  {...(overviewName ? { view: overviewName } : {})} onView={setOverviewName} />
               : center === "journey"
               ? <Journey model={model} run={run} index={index} select={select} onIndex={setIndex} eventsMode={eventsMode} onEventsMode={setEventsMode}
                   {...(journeyLines ? { lines: journeyLines } : {})} onLines={setJourneyLines} />

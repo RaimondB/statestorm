@@ -2,7 +2,7 @@ import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { frameOfEntry, type Run } from "../session.ts";
 import type { Model } from "@statestorm/kernel";
 import type { Selection } from "../selection.ts";
-import { buildOverview, byNote, differences, overviewConfig, spoken, stateWords, withEventsMode, type AskMark, type Badge, type Box, type EventsMode, type Sticky, type Tone } from "../overview.ts";
+import { buildView, byNote, differences, overviewConfig, spoken, stateWords, withEventsMode, type AskMark, type Badge, type Box, type EventsMode, type Sticky, type Tone } from "../overview.ts";
 
 /** The overview's switch: which events the reader sees, beside the model's configuration (ADR 0023). */
 const MODES: { mode: EventsMode; label: string; title: string }[] = [
@@ -32,6 +32,9 @@ interface Props {
   /** What the reader chose of the events; it travels in the link. */
   eventsMode: EventsMode;
   onEventsMode: (m: EventsMode) => void;
+  /** A named overview (ADR 0034), or the main one; it travels in the link. */
+  view?: string;
+  onView?: (name: string | undefined) => void;
 }
 
 /**
@@ -40,17 +43,20 @@ interface Props {
  * things underneath them. Every view is a projection of the frame, so stepping through a run
  * moves the colours through the journey.
  */
-export function Overview({ model, run, index, since, selection, select, onIndex, eventsMode, onEventsMode }: Props) {
+export function Overview({ model, run, index, since, selection, select, onIndex, eventsMode, onEventsMode, view, onView }: Props) {
   const read = useMemo(() => overviewConfig(model), [model]);
   const errors = read.errors;
-  const config = useMemo(() => withEventsMode(read.config, eventsMode), [read, eventsMode]);
+  const views = Object.keys(read.config.views ?? {});
+  const shownView = view && read.config.views?.[view] ? view : undefined;
+  const main = useMemo(() => withEventsMode(read.config, eventsMode), [read, eventsMode]);
+  const config = useMemo(() => (shownView ? withEventsMode(read.config.views![shownView]!, eventsMode) : main), [read, shownView, main, eventsMode]);
   const asking = Object.keys(read.config.asks).length > 0;
   // A model that asks nothing has no "+ asks": what it shows by default is its statuses.
   const shownMode: EventsMode = !asking && eventsMode === "requests" ? "statuses" : eventsMode;
   const frame = run.frames[index]!;
   const prevFrame = since >= 0 ? run.frames[since] : undefined;
-  const overview = useMemo(() => buildOverview(model, frame, run.world.log, config), [model, frame, run, config]);
-  const before = useMemo(() => (prevFrame ? buildOverview(model, prevFrame, run.world.log, config) : undefined), [model, prevFrame, run, config]);
+  const overview = useMemo(() => buildView(model, frame, run.world.log, config, main), [model, frame, run, config, main]);
+  const before = useMemo(() => (prevFrame ? buildView(model, prevFrame, run.world.log, config, main) : undefined), [model, prevFrame, run, config, main]);
   const diff = useMemo(() => differences(before, overview), [before, overview]);
   const [unit, setUnit] = useState<string>();
   // ADR 0027 §4: only the events that move a box worked in another role.
@@ -116,6 +122,15 @@ export function Overview({ model, run, index, since, selection, select, onIndex,
           {hasRoles && <span className="ov-sticky-key foreign" title="An event sent by another role than the one this box is worked in (ADR 0027)">↗ from elsewhere</span>}
           {asking && eventsMode === "requests" && <span className="ov-ask-key"><span className="ov-ask open">? asked</span> waiting · <span className="ov-ask answered">? asked</span> answered</span>}
         </span>
+        {views.length > 0 && (
+          <span className="map-levels" role="radiogroup" aria-label="Which overview">
+            {[undefined, ...views].map((name) => (
+              <button key={name ?? ""} role="radio" aria-checked={shownView === name} className={shownView === name ? "active" : ""}
+                title={name ? `The ${name} view of this run (the model's overview.views)` : "The model's overview"}
+                onClick={() => onView?.(name)}>{name ?? (read.config.roots ?? ["overview"]).join(", ")}</button>
+            ))}
+          </span>
+        )}
         <span className="map-levels" role="radiogroup" aria-label="Which events">
           {MODES.filter((m) => m.mode !== "requests" || asking).map((m) => (
             <button key={m.mode} role="radio" aria-checked={shownMode === m.mode} className={shownMode === m.mode ? "active" : ""}

@@ -87,22 +87,47 @@ export interface OverviewConfig {
   /** A link type saying which box follows which (`Link`, refs `before`/`after`): a
    *  sequence is then laid out in layers, so a merge draws as one — not in plan order. */
   follows?: { type: string; before: string; after: string };
+  /** ADR 0034: further overviews of the same run, by name — each read on its own. */
+  views?: Record<string, OverviewConfig>;
+  /** ADR 0034 §2: a parentless type drawn under the instance its field names, while that exists. */
+  under?: Record<string, { parent: string; by: string }>;
+  /** ADR 0034 §3: a unit's badge names the main overview's roots that carry it. */
+  badgesRoots?: boolean;
 }
 
 export type EventsMode = "statuses" | "requests" | "all";
 export interface Ask { mark: string; icon: string; answered: string[] }
 
-const KEYS = ["roots", "top", "flow", "journey", "hide", "omit", "side", "sequence", "band", "label", "events", "color", "follows", "attributes", "attributesWhileOpen", "exceptions", "takenOver"];
+const KEYS = ["roots", "top", "flow", "journey", "hide", "omit", "side", "sequence", "band", "label", "events", "color", "follows", "attributes", "attributesWhileOpen", "exceptions", "takenOver", "views"];
+/** A named view (ADR 0034 §1): the overview's keys, less what only the main one has, and its own two. */
+const VIEW_KEYS = [...KEYS.filter((k) => !["flow", "journey", "views"].includes(k)), "under", "badges"];
 
 /** Reads the model's `overview:` section, filling in what can be inferred. Every name is
  *  checked — a misspelt type or relation is an error, not a quietly missing box. */
 export function overviewConfig(model: Model): { config: OverviewConfig; errors: string[] } {
+  const raw = (model.overview ?? {}) as Json;
+  const read = readOverview(model, raw, KEYS);
+  if (read.errors.length > 0 && read.errors[0] === "overview: expected a block") return read;
+  const views = (raw as Record<string, Json>).views;
+  if (views === undefined) return read;
+  const errors = [...read.errors];
+  const named: Record<string, OverviewConfig> = {};
+  if (views === null || typeof views !== "object" || Array.isArray(views)) errors.push("overview.views: expected name: { roots, … }");
+  else for (const [name, body] of Object.entries(views)) {
+    const v = readOverview(model, body, VIEW_KEYS);
+    errors.push(...v.errors.map((e) => e.replace(/^overview([.:])/, `overview.views.${name}$1`)));
+    named[name] = v.config;
+  }
+  return { config: { ...read.config, views: named }, errors };
+}
+
+function readOverview(model: Model, rawIn: Json, keys: string[]): { config: OverviewConfig; errors: string[] } {
   const errors: string[] = [];
-  const raw = (model.overview ?? {}) as Record<string, Json>;
+  const raw = (rawIn ?? {}) as Record<string, Json>;
   if (typeof raw !== "object" || Array.isArray(raw) || raw === null) {
     return { config: defaults(model), errors: ["overview: expected a block"] };
   }
-  for (const key of Object.keys(raw)) if (!KEYS.includes(key)) errors.push(`overview: unknown key \`${key}\` (expected ${KEYS.join(", ")})`);
+  for (const key of Object.keys(raw)) if (!keys.includes(key)) errors.push(`overview: unknown key \`${key}\` (expected ${keys.join(", ")})`);
 
   const types = (key: string): string[] | undefined => {
     const v = raw[key];
@@ -251,6 +276,34 @@ export function overviewConfig(model: Model): { config: OverviewConfig; errors: 
       }
     }
   } else placement(raw.events, "overview.events");
+  // `under: { Type: { parent: Type, by: field } }` (ADR 0034 §2).
+  const under: Record<string, { parent: string; by: string }> = {};
+  if (raw.under !== undefined) {
+    if (raw.under === null || typeof raw.under !== "object" || Array.isArray(raw.under)) errors.push("overview.under: expected Type: { parent, by }");
+    else for (const [t, body] of Object.entries(raw.under as Record<string, Json>)) {
+      const b = (body ?? {}) as Record<string, Json>;
+      const def = model.aggregates[t];
+      const parent = model.aggregates[String(b.parent)];
+      if (!def) { errors.push(`overview.under: there is no aggregate called \`${t}\``); continue; }
+      if (def.role === "entity") { errors.push(`overview.under.${t}: an entity has its parent already`); continue; }
+      if (!parent) { errors.push(`overview.under.${t}: there is no aggregate called \`${b.parent}\``); continue; }
+      if (!(String(b.by) in def.data)) { errors.push(`overview.under.${t}: ${t} has no field \`${b.by}\``); continue; }
+      under[t] = { parent: parent.name, by: String(b.by) };
+    }
+    // A nesting that comes back to where it started would put a box inside itself.
+    for (const start of Object.keys(under)) {
+      const seen = new Set([start]);
+      for (let at = under[start]?.parent; at; at = under[at]?.parent) {
+        if (seen.has(at)) { errors.push(`overview.under.${start}: the nesting loops back to ${at}`); delete under[start]; break; }
+        seen.add(at);
+      }
+    }
+  }
+  let badgesRoots = false;
+  if (raw.badges !== undefined) {
+    if (String(raw.badges) === "roots") badgesRoots = true;
+    else errors.push(`overview.badges: \`${raw.badges}\` — expected roots`);
+  }
   return {
     config: {
       roots: types("roots"),
@@ -275,6 +328,8 @@ export function overviewConfig(model: Model): { config: OverviewConfig; errors: 
       ...(takenOver ? { takenOver } : {}),
       color,
       ...(follows ? { follows } : {}),
+      ...(Object.keys(under).length ? { under } : {}),
+      ...(badgesRoots ? { badgesRoots } : {}),
     },
     errors,
   };
@@ -491,13 +546,40 @@ export function labelFor(model: Model, inst: InstanceView, config: OverviewConfi
   }
 }
 
-export function buildOverview(model: Model, frame: Frame, log: LogEntry[], config: OverviewConfig): Overview {
+/**
+ * A named view (ADR 0034), with its units' badges naming the main overview's roots that carry them
+ * when it asks for that (`badges: roots`).
+ */
+export function buildView(model: Model, frame: Frame, log: LogEntry[], config: OverviewConfig, main: OverviewConfig): Overview {
+  if (!config.badgesRoots) return buildOverview(model, frame, log, config);
+  const carriers = new Map<string, string[]>();
+  for (const root of buildOverview(model, frame, log, { ...main, events: "none" }).roots) {
+    for (const unit of root.carries) (carriers.get(unit) ?? carriers.set(unit, []).get(unit)!).push(root.id);
+  }
+  return buildOverview(model, frame, log, config, carriers);
+}
+
+export function buildOverview(model: Model, frame: Frame, log: LogEntry[], config: OverviewConfig, carriers?: Map<string, string[]>): Overview {
   const all = Object.values(frame.instances).filter((i) => i.kind === "aggregate");
+  // ADR 0034 §2: a parentless instance drawn under the one its field names, while that one exists.
+  const placedUnder = new Map<string, { rel: string; key: string }>();
+  if (config.under) {
+    for (const inst of all) {
+      if (inst.parent && frame.instances[inst.parent.key]) continue;
+      const t = Object.keys(config.under).find((u) => isA(model, inst.machine, u));
+      if (!t) continue;
+      const { parent, by } = config.under[t]!;
+      const id = inst.data[by];
+      if (typeof id !== "string" || id === "") continue;
+      const host = all.find((h) => h.key !== inst.key && h.key.slice(h.key.indexOf("#") + 1) === id && isA(model, h.machine, parent));
+      if (host) placedUnder.set(inst.key, { rel: t, key: host.key });
+    }
+  }
+  const parentOf = (i: InstanceView) => (i.parent && frame.instances[i.parent.key] ? i.parent : placedUnder.get(i.key));
   const childrenOf = new Map<string, InstanceView[]>();
   for (const inst of all) {
-    if (inst.parent && frame.instances[inst.parent.key]) {
-      (childrenOf.get(inst.parent.key) ?? childrenOf.set(inst.parent.key, []).get(inst.parent.key)!).push(inst);
-    }
+    const p = parentOf(inst);
+    if (p) (childrenOf.get(p.key) ?? childrenOf.set(p.key, []).get(p.key)!).push(inst);
   }
   const onTop = (i: InstanceView) => matches(model, i.machine, config.top);
   const hidden = (i: InstanceView) => !onTop(i) && matches(model, i.machine, config.hide);
@@ -527,9 +609,9 @@ export function buildOverview(model: Model, frame: Frame, log: LogEntry[], confi
     const summaries: Box["summaries"] = [];
     const groups: Box["groups"] = [];
     const carries = new Set<string>();
-    const rels = [...new Set(kids.map((k) => k.parent!.rel))];
+    const rels = [...new Set(kids.map((k) => parentOf(k)!.rel))];
     for (const rel of rels) {
-      const members = kids.filter((k) => k.parent!.rel === rel);
+      const members = kids.filter((k) => parentOf(k)!.rel === rel);
       const shown = members.filter((k) => !hidden(k));
       const folded = members.filter(hidden);
       if (folded.length > 0) {
@@ -641,7 +723,7 @@ export function buildOverview(model: Model, frame: Frame, log: LogEntry[], confi
     return out.filter((l) => l && l.length > 0);
   }
 
-  const parentless = all.filter((i) => !i.parent || !frame.instances[i.parent.key]);
+  const parentless = all.filter((i) => !parentOf(i));
   const side = parentless.filter(inSide);
   const candidates = parentless.filter((i) => !inSide(i) && !hidden(i) && !onTop(i) && !isException(i) && !matches(model, i.machine, config.omit));
   const rootList = config.roots ? candidates.filter((i) => matches(model, i.machine, config.roots!)) : candidates;
@@ -683,6 +765,19 @@ export function buildOverview(model: Model, frame: Frame, log: LogEntry[], confi
   }
   for (const list of Object.values(asks)) for (const a of list) for (const o of a.occurrences) {
     if (o.subject) o.label = badgeOf(model, frame, config, o.subject).label;
+  }
+  if (carriers) {
+    // ADR 0034 §3: each unit named with the main overview's roots that carry it.
+    const named = (b: Badge): Badge => (carriers.has(b.key) ? { ...b, label: `${b.label} · ${carriers.get(b.key)!.join(", ")}` } : b);
+    const walk = (box: Box) => {
+      for (const sm of box.summaries) for (const st of sm.byState) st.items = st.items.map(named);
+      for (const g of box.groups) g.children.forEach(walk);
+    };
+    [...top, ...roots, ...exceptions].forEach(walk);
+    for (const list of Object.values(placed)) for (const st of list) {
+      st.badges = st.badges.map(named);
+      for (const g of st.statuses ?? []) g.badges = g.badges.map(named);
+    }
   }
   return { top, roots, exceptions, side, others: rootList.length > 0 ? others : [], stickies: placed, asks };
 }

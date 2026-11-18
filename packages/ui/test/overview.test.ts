@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { loadModel, type Model } from "@statestorm/kernel";
 import { parseScenario } from "@statestorm/scenarios";
-import { buildOverview, byNote, overviewConfig, spoken, toneOf, withEventsMode, type Box } from "../src/overview.ts";
+import { buildOverview, buildView, byNote, overviewConfig, spoken, toneOf, withEventsMode, type Box } from "../src/overview.ts";
 import { actionsOf, play } from "../src/session.ts";
 import { fileURLToPath } from "node:url";
 import { readScenario } from "@statestorm/scenarios/files";
@@ -603,4 +603,51 @@ test("ADR 0027 §4: an event shows under its own role's task that heard it, thou
   assert.ok(where.some((t) => t.startsWith("Site")), `and where it moved the other role's step: ${where.join(", ")}`);
   const own = Object.entries(overview.stickies).filter(([b]) => b.startsWith("Transfer")).flatMap(([, l]) => l).find((s) => s.event === "PickedUp");
   assert.equal(own?.foreign, undefined, "owned there");
+});
+
+// ADR 0034: a named view nests an aggregate under the one its field names — once that exists — and
+// names each unit with the main overview's roots that carry it.
+test("a named view: the box on its own until a van run is booked to it, its samples named with their request", () => {
+  const lab = load("lab");
+  const sc = scenario("lab/12-two-requests-in-one-cool-box-on-a-van-run.yaml");
+  const r = play(lab, actionsOf(sc), sc.schedule ?? fifo, sc.given.at);
+  const { config, errors } = overviewConfig(lab);
+  assert.deepEqual(errors, []);
+  const vans = config.views?.Vans;
+  assert.ok(vans, "the Vans view is read");
+  const at = (pred: (f: (typeof r.frames)[number]) => boolean) => r.frames.findIndex(pred);
+  const packed = at((f) => f.instances["BoxSlot#BOX12-S22"] !== undefined && f.instances["VanRun#VAN12"] === undefined);
+  const booked = at((f) => f.instances["CoolBox#BOX12"]?.config[0]?.[0] === "booked");
+  assert.ok(packed >= 0 && booked > packed);
+
+  const before = buildView(lab, r.frames[packed]!, r.world.log, vans, config);
+  assert.deepEqual(before.roots.map((b) => b.key), ["CoolBox#BOX12"]);   // no van yet: the box stands on its own
+  const slots = before.roots[0]!.summaries.find((s) => s.rel === "slots")!;
+  assert.deepEqual(slots.byState.flatMap((s) => s.items.map((i) => i.label)), ["S21 · R12A", "S22 · R12B"]);
+
+  const after = buildView(lab, r.frames[booked]!, r.world.log, vans, config);
+  assert.deepEqual(after.roots.map((b) => b.key), ["VanRun#VAN12"]);
+  assert.deepEqual(after.roots[0]!.groups.flatMap((g) => g.children.map((c) => c.key)), ["CoolBox#BOX12"]);
+
+  // The main overview is untouched: the requests are its roots, boxes and vans are not drawn.
+  const main = buildOverview(lab, r.frames[booked]!, r.world.log, config);
+  assert.deepEqual(main.roots.map((b) => b.key).sort(), ["Request#R12A", "Request#R12B"]);
+});
+
+test("a named view's mistakes are named with the view", () => {
+  const model = loadModel(`context: T
+aggregates:
+  Box: { creators: [Open], data: { run: { type: string, default: "" } }, initial: open, states: { open: { on: { Open: {} } } } }
+  Van: { creators: [Book], initial: booked, states: { booked: { on: { Book: {} } } } }
+overview:
+  views:
+    Vans:
+      roots: [Van]
+      under: { Box: { parent: Van, by: rn } }
+      badges: request
+`);
+  assert.deepEqual(overviewConfig(model).errors, [
+    "overview.views.Vans.under.Box: Box has no field `rn`",
+    "overview.views.Vans.badges: `request` — expected roots",
+  ]);
 });

@@ -67,7 +67,7 @@ test("every box says what it is, and an aggregate that owns entities is drawn as
   const s = structureOf(lab);
   const t = (n: string) => s.types.find((x) => x.name === n)!;
   assert.deepEqual([t("Route").role, t("SiteHandling").role, t("TubeRow").role], ["aggregate", "entity", "value"]);
-  assert.deepEqual(s.frames.sort(), ["Analysis", "Route", "SiteVisit", "Step", "Transfer"]);
+  assert.deepEqual(s.frames.sort(), ["Analysis", "CoolBox", "Route", "SiteVisit", "Step", "Transfer"]);
   assert.equal(t("Task").frame, "Step", "abstract: nothing creates it, so it stays with the relation the abstract Step declares");
   assert.equal(t("SiteTask").frame, "SiteVisit", "a site visit creates its tasks (ADR 0013 §2)");
   assert.equal(t("SiteHandling").frame, "SiteVisit", "created by a site task, so inside the task's aggregate");
