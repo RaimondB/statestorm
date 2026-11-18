@@ -641,6 +641,12 @@ function applyTransition(
         cause, inst.key);
       return;
     }
+    // ADR 0033: an optional list the command does not carry is an empty one — nothing to walk.
+    const fields = "value" in transition.takes ? world.model.values[transition.takes.value]!.fields : transition.takes.fields;
+    const absent = Object.entries(fields).filter(([k, f]) => f.list && f.optional && (payload as Record<string, Json>)[k] === undefined).map(([k]) => k);
+    if (absent.length > 0) {
+      scope = { ...scope, vars: { ...scope.vars, command: { ...(payload as Record<string, Json>), ...Object.fromEntries(absent.map((k) => [k, []])) } } };
+    }
   }
 
   const nextData = { ...inst.data };

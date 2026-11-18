@@ -245,7 +245,7 @@ test("an arrow says the fields the model declares, and the instances it reached 
 
   const refused = (yaml: string, message: RegExp) => assert.throws(() => loadModel(LAB.replace(/\nsequence:\n  label:\n(    .*\n)+/, `\nsequence:\n  label:\n    ${yaml}\n`)), message);
   refused("Sample.Fly: [event]", /Sample answers no command `Fly`/);
-  refused("Route.Plan: [colour]", /`colour` is not among its fields \(request, lab, priority, tubes\), nor `id`/);
+  refused("Route.Plan: [colour]", /`colour` is not among its fields \(request, lab, priority, tubes, instructions\), nor `id`/);
   refused("Nothing: [x]", /`Nothing` is no command \(Type.Command\) and no event the model raises/);
   refused("PatientInformed: [colour]", /`colour` is not among its fields \(about\)/);
   refused("Sample.Scan: []", /name the fields its arrow shows/);

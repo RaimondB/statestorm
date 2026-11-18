@@ -12,14 +12,14 @@ given:
   phase: Planning
   send:
     - Request#R6.Create: { patient: P6, samples: [S8] }
-    - Route#R6-REF1.Plan: { request: R6, lab: REF1, tubes: [ { sample: S8, tube: serum } ] }
+    # The plan brings its instruction; the other plans bring none (ADR 0033).
+    - Route#R6-REF1.Plan: { request: R6, lab: REF1, tubes: [ { sample: S8, tube: serum } ], instructions: [ { kind: temperature, detail: frozen } ] }
     - SiteVisit#R6-CLIN1.Plan: { route: R6-REF1, site: CLIN1, samples: [S8] }
     - CourierRun#R6-C1.Plan: { route: R6-REF1, origin: CLIN1, destination: LAB1, by: courier 7, samples: [S8] }
     - SiteVisit#R6-LAB1.Plan: { route: R6-REF1, site: LAB1, samples: [S8] }
     - CourierRun#R6-C2.Plan: { route: R6-REF1, origin: LAB1, destination: REF1, by: courier 9, samples: [S8] }
     - Analysis#R6-SPEC.Plan: { route: R6-REF1, site: REF1, department: special chemistry, stability: 48h, samples: [S8] }
     - Route#R6-REF1.Link: { link: R6-SPEC-after-C2, before: "CourierRun#R6-C2", after: "Analysis#R6-SPEC" }
-    - Route#R6-REF1.Instruct: { kind: temperature, detail: frozen }
 when:
   - phase: To the local lab
   - send: { Sample#S8.Scan: { scanId: c-S8, event: Collected, site: CLIN1 } }

@@ -359,8 +359,9 @@ aggregates:
         on:
           Plan#stat:
             guard: command.priority == 'stat'
-            takes: &route_plan { request: string, lab: string, priority: string?, tubes: [TubeRow] }
-            assign: { request: command.request, lab: command.lab, priority: "'stat'" }
+            # A plan may bring its instructions; most bring none — an absent list is an empty one (ADR 0033).
+            takes: &route_plan { request: string, lab: string, priority: string?, tubes: [TubeRow], instructions: [Instruction?] }
+            assign: { request: command.request, lab: command.lab, priority: "'stat'", instructions: command.instructions }
             emit: &route_planned [ RoutePlanned: { route: "${id}", request: "${command.request}" } ]
             send: &route_tasks
               - to: "RouteTask#${id}-collect.Plan"
@@ -375,7 +376,7 @@ aggregates:
                 with: { task: "RouteTask#${id}-report", sample: "${item.sample}", kind: report, site: "" }
           Plan:
             takes: *route_plan
-            assign: { request: command.request, lab: command.lab }
+            assign: { request: command.request, lab: command.lab, instructions: command.instructions }
             emit: *route_planned
             send: *route_tasks
           Link: &link
