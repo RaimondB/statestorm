@@ -277,7 +277,7 @@ is built and shown: `why: [R1]` on the `Loan` type and on scenario 01, `why: [R2
 on scenario 02 (a `why:` line at the top of a scenario file).
 
 ```bash
-pnpm docs          # the rulebook the owner reads, generated into docs/rulebook/ (commit it)
+pnpm run docs      # the rulebook the owner reads, generated into docs/rulebook/ (commit it); not bare `pnpm docs`, pnpm's own
 pnpm check         # now also traces the docs: every agreed rule cited by the model and a scenario
 pnpm rules --open  # what waits on the owner — the agenda of the next session
 ```
@@ -385,7 +385,8 @@ library/
 |---|---|
 | `Permission denied (publickey)` or `Repository not found` on install | no read access yet, or git cannot use your key or token — step 0 |
 | `statestorm skills: . is not a domain folder yet — it has no model.yaml` | install ran before the model existed — write `model.yaml`, `pnpm install` again |
+| `pnpm docs` opens a browser, or fails with "Set the BROWSER environment variable" | pnpm's own `docs` command ran, not the script — `pnpm run docs` |
 | `statestorm dev: port 5181 is in use` | another workbench runs there — `pnpm dev --port=5182` |
 | `✗ .claude/skills/<skill>/SKILL.md was edited in this repo` | a copied skill was changed — move the change to `DOMAIN.md` beside it, or `pnpm exec statestorm skills . --force` |
-| `pre-commit: the docs do not check` | `pnpm docs` regenerates the rulebook; `pnpm exec statestorm check . --docs` says what else |
+| `pre-commit: the docs do not check` | `pnpm run docs` regenerates the rulebook; `pnpm exec statestorm check . --docs` says what else |
 | a scenario passes under `fifo` but fails under `random(n)` or `duplicate` | the model depends on order or on hearing a message once — ADR 0006 and skill `model-authoring` |
