@@ -49,12 +49,6 @@ Status is one of `open`, `claimed — …`, `blocked — <on what>`.
 - **done when:** the scripts ship in the package and a domain repo runs them against its own site
   (`BASE=`), documented in the README.
 
-### B-4 Cache parsed guard expressions
-- **status:** open
-- **why:** about 60% of the model check's own time is spent lexing the same guard expressions again.
-- **done when:** the kernel parses each expression once; `pnpm verify` is measurably faster and its
-  output unchanged.
-
 ### B-5 Run the check's scenarios in parallel
 - **status:** open
 - **why:** the scenario runs inside the model check are single-threaded; only the proposal search uses
@@ -73,6 +67,20 @@ Status is one of `open`, `claimed — …`, `blocked — <on what>`.
 - **why:** `for_each` filters with `where:` (ADR 0026); `for_each_referrer` reaches every referrer and
   leaves the filtering to each receiver's guard, so most answers are `ignored`.
 - **done when:** decided by an ADR, with a scenario that cannot be written without it — or dropped.
+
+### B-15 Structure's layout off the page's thread
+- **status:** open
+- **why:** ELK lays a large model's structure out in about half a second, and the page freezes while it
+  does. A second opening is free (the layout is kept per model and options), but the first is not.
+- **done when:** ELK runs in a worker, in the served site and in the single shared file alike; the page
+  answers while a large model is laid out.
+
+### B-16 Load a large domain without freezing
+- **status:** open
+- **why:** loading a domain with about 200 scenarios freezes the page for about two seconds: the model
+  and every scenario are parsed at once, before anything is shown.
+- **done when:** the page is usable while a large domain loads, as the Flow board already is while its
+  runs are made (`runs.ts`); measured on a domain of about 200 scenarios.
 
 ## Later — on the roadmap, not yet started
 
