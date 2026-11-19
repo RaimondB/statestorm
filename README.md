@@ -27,16 +27,17 @@ their own and use this one as a dependency.
 
 ## Setup
 
-You need **Node 22.18 or newer** (24 recommended — `node --version`), **pnpm 9** (comes with Node:
-`corepack enable`, then `pnpm --version`), and git. The repo is private for now: you need read access to
-[RaimondB/statestorm](https://github.com/RaimondB/statestorm).
+You need **Node 22.18 or newer** (24 recommended; check with `node --version`), **pnpm 9**
+(`npm install -g pnpm@9.15.0` if needed; check with `pnpm --version`), and git. The
+[repository](https://github.com/RaimondB/statestorm) is public; no GitHub account or SSH key is
+needed to clone it or install it as a dependency.
 
 ```bash
-git clone git@github.com:RaimondB/statestorm.git
+git clone https://github.com/RaimondB/statestorm.git
 cd statestorm
 pnpm install          # also builds the site and the `statestorm` command (dist/)
 pnpm dev              # the workbench at http://localhost:5180/ — the bundled examples, Open folder…
-pnpm verify           # tests, typecheck and the model check of every example (~10s)
+pnpm verify           # tests, typecheck, model checks, and neutrality check
 ```
 
 ```bash
@@ -51,6 +52,12 @@ pnpm build            # the site, static, in packages/ui/dist — no server need
 pnpm package          # the site plus the bundled `statestorm` command in dist/ (what a domain repo installs)
 docker compose up -d --build   # the site behind nginx, on the LAN at :8097
 ```
+
+### Contributing
+
+Open a pull request from a feature branch (or from a fork if you do not have write access).
+`master` is protected: only the repository admin can merge PRs, and direct pushes are blocked.
+See the [backlog](BACKLOG.md) for how to claim work and run `pnpm verify` before asking for review.
 
 ### Checking the UI in a browser
 
@@ -99,16 +106,13 @@ workbench and bundles the `statestorm` command. Follow a branch, or pin a tag:
     "build": "statestorm build . --out=site --name=<domain>"
   },
   "devDependencies": {
-    "statestorm": "git+ssh://git@github.com/RaimondB/statestorm.git#master"
+    "statestorm": "git+https://github.com/RaimondB/statestorm.git#master"
   }
 }
 ```
 
 `#master` follows the platform (the lockfile holds the commit in use; `pnpm update statestorm`
-takes the latest); a tag pins a release. Installing needs read access to this repo: over SSH as
-above, with a key on your GitHub account, or over HTTPS —
-`git+https://github.com/RaimondB/statestorm.git#master` — with a credential git can use
-(`gh auth setup-git` sets one up).
+takes the latest); a tag pins a release. The HTTPS URL works without GitHub credentials.
 
 ```
 statestorm test  <domain folder> [--schedules] [--trace[=name]]
@@ -178,8 +182,8 @@ The platform's skills (`.claude/skills/`, which Claude Code and Copilot both loa
 "how we work on a model" rules of `AGENTS.md` are the platform's, and change with it
 ([ADR 0017](docs/adr/0017-shared-skills-in-domain-repos.md)). `statestorm skills .` copies them into
 the domain repo as committed files — every agent sees them, a cloud agent before anything is
-installed — and the `postinstall` above runs it on every `pnpm install` and `pnpm update
-statestorm`, so they arrive in the same diff as the lockfile.
+installed. The `postinstall` above runs it on `pnpm install`. After `pnpm update statestorm`, run
+`pnpm exec statestorm skills .` explicitly so the copies and the lockfile stay in step.
 
 - **Don't edit a copy**: a copy changed in the domain repo is said, not overwritten (`--force` takes
   the platform's). What the domain adds to a skill goes in `DOMAIN.md` beside it; the copy then says
@@ -190,7 +194,7 @@ statestorm`, so they arrive in the same diff as the lockfile.
 
 ### Sharing a model with stakeholders
 
-`statestorm share .` writes the whole workbench and the domain into **one HTML file** (about 3 MB),
+`statestorm share .` writes the whole workbench and the domain into **one HTML file**,
 named by when it was made: `<name>-<yyyymmddhhmm>.html`. Mail it, put it on a share or in a Teams
 channel: the reader double-clicks it and it opens in their browser — no install, no server, no
 network, nothing sent anywhere. They see every view, run every scenario, fire commands and step
@@ -321,8 +325,8 @@ changes nothing, the run says why, with the values the guard actually saw —
 ## Delivery is at-least-once
 
 The infrastructure under these models duplicates messages and reorders them, so `fifo` is
-only the first pass — the readable story a workshop needs. `pnpm chaos` runs every scenario
-again under reordering and redelivery, and the loader warns about the shapes that cannot
+only the first pass — the readable story a workshop needs. `pnpm chaos` runs the reference
+model's scenarios under reordering and redelivery, and the loader warns about the shapes that cannot
 survive it: an assignment that reads the field it writes, or a state change driven by a
 moment that might never be observed. See [ADR 0006](docs/adr/0006-at-least-once-delivery.md).
 
