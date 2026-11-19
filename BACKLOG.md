@@ -6,9 +6,9 @@ platform, person or agent. A domain's own work is in that domain's repo, not her
 ## How to use it
 
 - **Pick an item, claim it, then start.** Set its `status:` to `claimed — <who>, <branch>, <date>`
-  and push that one-line change to `master` (or open a draft pull request with it) before you write any
-  code. That is how a second person or agent sees it is taken. One item per branch, named
-  `b<id>-<what>` (e.g. `b4-cached-guards`).
+  and open a draft pull request with that one-line change before you write any code. That is how
+  a second person or agent sees it is taken. One item per branch, named `b<id>-<what>`
+  (e.g. `b4-cached-guards`). The repository admin merges the PR; direct pushes to `master` are blocked.
 - **Done is deleted.** The pull request that finishes an item removes it from this file; its
   description and the commits say what was built. Nothing here is kept for history — git keeps it.
 - **Found something?** Add an item at the end of its section with the next free id (ids are never
@@ -58,7 +58,7 @@ Status is one of `open`, `claimed — …`, `blocked — <on what>`.
 ### B-6 A package without the git dependency
 - **status:** open
 - **why:** a domain installs the platform as a git dependency, which builds the site on install
-  (`prepare`) and needs read access to this repo.
+  (`prepare`) instead of downloading a prebuilt package.
 - **done when:** a published package (npm or GitHub Packages) is the documented way to install, and a
   domain repo installs it without building.
 

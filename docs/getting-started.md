@@ -11,13 +11,9 @@ The [README](../README.md) is the reference for every command and file; this is 
 ## 0. Before you start
 
 - **Node 22.18 or newer** (24 recommended): `node --version`.
-- **pnpm 9**, which comes with Node: `corepack enable`, then `pnpm --version`.
-- **git**, and **read access to [RaimondB/statestorm](https://github.com/RaimondB/statestorm)** — the
-  repository is private for now: ask its owner to add your GitHub account. Then check you can reach
-  it, one of two ways:
-  - **SSH** — a key on your GitHub account: `ssh -T git@github.com` greets you by name.
-  - **HTTPS** — the GitHub CLI: `gh auth login`, then `gh auth setup-git` so git can use it. Use the
-    `git+https://` form of the dependency in step 3.
+- **pnpm 9**: `npm install -g pnpm@9.15.0` if needed, then `pnpm --version`.
+- **git** and network access to [RaimondB/statestorm](https://github.com/RaimondB/statestorm).
+  The repository is public; the HTTPS dependency in step 3 needs no GitHub credentials.
 
 ## 1. Create the repository
 
@@ -125,13 +121,12 @@ messages may arrive twice, and the model answers every command it can receive
     "share": "statestorm share . --name=library"
   },
   "devDependencies": {
-    "statestorm": "git+ssh://git@github.com/RaimondB/statestorm.git#master"
+    "statestorm": "git+https://github.com/RaimondB/statestorm.git#master"
   }
 }
 ```
 
-Over HTTPS (step 0), the dependency is `git+https://github.com/RaimondB/statestorm.git#master`.
-`#master` follows the platform; a tag (`#v0.3.0`) pins a release.
+`#master` follows the platform; a tag (such as `#v0.4.0`) pins a release.
 
 ```bash
 pnpm install
@@ -318,8 +313,8 @@ git add -A && git commit -m "library: lending and overdue loans"
 pnpm share
 ```
 
-writes `exports/library-<yyyymmddhhmm>.html` — the whole workbench with your domain inside, one file
-of about 2 MB. Mail it or put it on a share; it opens in any browser with nothing installed and sends
+writes `exports/library-<yyyymmddhhmm>.html` — the whole workbench with your domain inside, in one
+file. Mail it or put it on a share; it opens in a browser with nothing installed and sends
 nothing anywhere. It names the commit it was made from, and warns when that commit is not pushed. For
 a meeting about a few scenarios, an **agenda** (`agendas/<name>.yaml`, [ADR 0025](adr/0025-agendas-scenarios-chosen-for-a-meeting.md))
 and `pnpm share --agenda=<name>`. The README's "Sharing a model with stakeholders" has the options.
@@ -349,11 +344,12 @@ never touched.
 
 ```bash
 pnpm update statestorm
+pnpm exec statestorm skills .
 ```
 
-takes the platform's latest `master` (the lockfile holds the commit in use) and brings the skills and
-shared rules along. Run `pnpm test` and `pnpm check`, then commit the lockfile, the skills and
-`AGENTS.md` together — the platform's news, in one diff.
+The first command updates the lockfile to the platform's latest `master`; the second syncs the
+skills and shared rules. Run `pnpm test` and `pnpm check`, then commit the lockfile, the skills and
+`AGENTS.md` together.
 
 ## 12. When the platform cannot say what you need
 
@@ -383,7 +379,7 @@ library/
 
 | You see | It means |
 |---|---|
-| `Permission denied (publickey)` or `Repository not found` on install | no read access yet, or git cannot use your key or token — step 0 |
+| `Permission denied (publickey)` or `Repository not found` on install | check that the dependency uses the public HTTPS URL in step 3 and Git is not rewriting it to SSH |
 | `statestorm skills: . is not a domain folder yet — it has no model.yaml` | install ran before the model existed — write `model.yaml`, `pnpm install` again |
 | `pnpm docs` opens a browser, or fails with "Set the BROWSER environment variable" | pnpm's own `docs` command ran, not the script — `pnpm run docs` |
 | `statestorm dev: port 5181 is in use` | another workbench runs there — `pnpm dev --port=5182` |

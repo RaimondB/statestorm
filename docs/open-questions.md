@@ -31,9 +31,10 @@ allowed to reopen the browser-only constraint (R35).
 
 ### Q7 — Repo home and licence ✅ GitHub, private to start, LGPL
 
-Private GitHub repo under `RaimondB`, LGPL-3.0-or-later. The kernel being a reusable library
-is what makes LGPL the right fit — someone can embed it without their own code being pulled
-in, while fixes to the kernel itself stay in the open.
+The [GitHub repository](https://github.com/RaimondB/statestorm) started private and is now public.
+The licence remains [LGPL-3.0-or-later](../LICENSE). The kernel being a reusable library is what
+makes LGPL the right fit — someone can embed it without their own code being pulled in, while fixes
+to the kernel itself stay in the open.
 
 ### Q9 — The name ✅ statestorm
 
