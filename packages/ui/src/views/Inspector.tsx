@@ -117,6 +117,7 @@ export function Inspector({ model, run, index, selection, select, onIndex, docs,
         </>)}
         {pol && (<>
           <h4>Policy <code>{pol.name}</code></h4>
+          <RunsIn policy={pol} />
           <Why ids={[...new Set([...(pol.why ?? []), ...allTransitions(pol).filter((t) => !event || t.name.split("#")[0] === event).flatMap((t) => t.transition.why ?? [])])]} title="Rules it implements" />
         </>)}
         {reacting.length > 0 && <><div className="hint">policies reacting to it</div><ul>{reacting.map((p) => <li key={p.name}><code>{p.name}</code>{p.why?.length ? <span className="hint"> · {p.why.join(", ")}</span> : null}</li>)}</ul></>}
@@ -184,6 +185,15 @@ export function Inspector({ model, run, index, selection, select, onIndex, docs,
         <span className="kind-tag">what crosses between them</span>
         <h3>{selection.from} → {selection.to}</h3>
         {relations.map((r) => <p key={r.pattern}>«{r.pattern}» — {r.upstream} upstream, {r.downstream} downstream</p>)}
+        {selection.downstream?.length === 1 && (selection.policies?.length ?? 0) > 0 && (() => {
+          const down = selection.downstream[0]!, up = down === selection.from ? selection.to : selection.from;
+          return <p><b>{down}</b> is downstream of <b>{up}</b>: it {down === selection.to ? "hears its events" : "sends it commands"}, in the policies that run there <span className="hint">(ADR 0035)</span></p>;
+        })()}
+        {selection.mutual && <p className="warn-text">{selection.from} and {selection.to} depend on each other — let one only hear the other <span className="hint">(ADR 0035)</span></p>}
+        {selection.downstream?.length === 0 && (selection.policies?.length ?? 0) > 0 && <p className="hint">Its policies say nowhere where they run, so who depends on whom is not known (ADR 0035, <code>in:</code>).</p>}
+        {(selection.policies?.length ?? 0) > 0 && <><h4>Policies ({selection.policies!.length})</h4><ul>{selection.policies!.map((p) => (
+          <li key={p}><code>{p}</code>{model.policies[p]?.runsIn ? <span className="hint"> · {runsInText(model.policies[p]!.runsIn!)}</span> : null}</li>
+        ))}</ul></>}
         {docs && <RuleList rules={relations.flatMap((r) => rulesCiting(docs, `relation ${r.upstream} → ${r.downstream}`))} title="Rules about the relation" />}
         {selection.events.length > 0 && <><h4>Events ({selection.events.length})</h4><ul>{selection.events.map((e) => <li key={e}><Link onClick={() => select({ kind: "message", event: e })}>◆ {e}</Link></li>)}</ul></>}
         {selection.commands.length > 0 && <><h4>Commands ({selection.commands.length})</h4><ul>{selection.commands.map((c) => <li key={c}><Link onClick={() => select({ kind: "message", command: c })}>▸ {c}</Link></li>)}</ul></>}
@@ -217,6 +227,7 @@ export function Inspector({ model, run, index, selection, select, onIndex, docs,
           <dt>declared on</dt><dd><Link onClick={() => select({ kind: "state", machine: machine.name, ref: t.ownerRef })}>{t.ownerRef}</Link>
             {t.ownerRef.includes(".") || Object.keys(machine.states[t.ownerRef]?.states ?? {}).length > 0
               ? <span className="hint"> — applies from every substate</span> : null}</dd>
+          {machine.kind === "policy" && machine.runsIn && <><dt>runs</dt><dd>{runsInText(machine.runsIn)} <span className="hint">(ADR 0035)</span></dd></>}
           {def.inheritedFrom && <><dt>inherited</dt><dd>from <code>{def.inheritedFrom}</code> <span className="hint">— every subclass has it</span></dd></>}
           <dt>goes to</dt><dd>{def.target ? <code>{def.target}</code> : <span>stays put <span className="hint">(internal)</span></span>}</dd>
           {def.guard && <><dt>only if</dt><dd><code>{def.guard}</code></dd></>}
@@ -365,4 +376,15 @@ function JsonValue({ v }: { v: Json }) {
   if (v === null || typeof v !== "object") return <>{JSON.stringify(v)}</>;
   if (Array.isArray(v) ? v.length === 0 : Object.keys(v).length === 0) return <>{JSON.stringify(v)}</>;
   return <pre className="json">{JSON.stringify(v, null, 2)}</pre>;
+}
+
+/** ADR 0035: where a policy runs, said. */
+function runsInText(runsIn: string): string {
+  return runsIn === "target" ? "in each part it commands, for its own types"
+    : runsIn === "source" ? "in each part that raises its event, for its own"
+    : `in ${runsIn}`;
+}
+
+function RunsIn({ policy }: { policy: { runsIn?: string } }) {
+  return policy.runsIn ? <div className="hint">runs {runsInText(policy.runsIn)} (ADR 0035)</div> : null;
 }

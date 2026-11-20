@@ -554,6 +554,14 @@ ol.log .chain { grid-column: 4; font-size: 0.85rem; color: var(--muted); }
 .map-head { fill: var(--muted); }
 .map-edge { cursor: pointer; }
 .map-edge:hover .map-line, .map-edge.picked .map-line { stroke: var(--accent); stroke-width: 2.4; }
+.map-edge.mutual .map-line { stroke: var(--warn); stroke-dasharray: 5 3; }
+.map-key.mutual { border: none; border-top: 2px dashed var(--warn); height: 0; }
+.map-end circle { fill: var(--surface); stroke: var(--muted); stroke-width: 1.2; }
+.map-end text { font: 700 10px var(--sans); fill: var(--muted); }
+.map-end.down circle { fill: var(--fg); stroke: var(--fg); }
+.map-end.down text { fill: var(--surface); }
+.map-edge.mutual .map-end.down circle { fill: var(--warn); stroke: var(--warn); }
+.map-end-key { font: 700 11px var(--sans); border: 1.2px solid currentColor; border-radius: 50%; padding: 0 4px; margin-right: 2px; }
 .map-label { font: 12px var(--sans); fill: var(--fg); paint-order: stroke; stroke: var(--surface); stroke-width: 4px; }
 .map-picked { padding: 6px 12px; border-bottom: 1px solid var(--line); font-size: 13px; max-height: 30%; overflow: auto; }
 .map-what { color: var(--muted); font-size: 12px; margin-right: 6px; }
@@ -766,3 +774,4 @@ pre.json {
   font-family: var(--mono); font-size: 0.82em; line-height: 1.35; white-space: pre-wrap; overflow-wrap: anywhere;
   max-height: 28em; overflow: auto;
 }
+.warn-text { color: var(--warn); }
