@@ -443,3 +443,13 @@ test("statestorm dev on a port already in use says so and how to choose another"
     busy.close();
   }
 });
+
+test("check says in its Systems section where two parts depend on each other (ADR 0035)", () => {
+  const dir = labDomain();
+  const file = join(dir, "model.yaml");
+  // The stop heard step to step, as before the sample was its hub.
+  writeFileSync(file, readFileSync(file, "utf8").replace("    in: source\n    on: SampleStopped\n    command: \"Sample#${event.sample}.Stop\"",
+    "    in: target\n    on: SampleStopped\n    for_each_referrer: { via: Handling.sample, of: \"${event.sample}\" }\n    command: \"${item}.SampleStopped\""));
+  const out = spawnSync(process.execPath, [cli, "check", dir], { encoding: "utf8" }).stdout;
+  assert.match(out, /Systems \(ADR 0018, ADR 0020, ADR 0035\)\n(  .*\n)*  ! Bench and Ordering depend on each other — Bench through report_stop, Ordering through report_stop/);
+});

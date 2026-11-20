@@ -252,10 +252,10 @@ export async function check(args: string[]): Promise<number> {
 
   // ---- systems (ADR 0018, ADR 0020): who sends what the scenarios send from outside
   if (model.systems) {
-    console.log("\nSystems (ADR 0018, ADR 0020)");
+    console.log("\nSystems (ADR 0018, ADR 0020, ADR 0035)");
     const sys = model.systems;
     const externals = sys.systems.filter((s) => s.external);
-    for (const f of model.findings) if (/ADR 0018|ADR 0020|^relations:/.test(f.message)) say(f.severity, f.message);
+    for (const f of model.findings) if (/ADR 0018|ADR 0020|ADR 0035|^relations:/.test(f.message)) say(f.severity, f.message);
     // Each command sent from outside, said as Type.Command — and, where a sender is narrowed by a
     // field of the payload, with that field's value: the unit a sender is declared for.
     const kinds = new Map<string, boolean>();
