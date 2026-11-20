@@ -30,6 +30,12 @@ keep a model honest under at-least-once, unordered delivery.
   type's package says which system owns the shared definition. A vendor's system that runs logic the
   model specifies is `external: true` with `packages:`; `sends:` narrowed by payload tells several
   senders of one command apart.
+- **A policy runs in a part** (ADR 0035), and that decides who depends on whom: `in: <sub-system>`, or
+  `in: target` (each part it commands runs it for its own types: they hear the event) or `in: source`
+  (each part raising the event runs it: it sends the command). A part hearing another's event, or
+  sending it a command, is downstream of it. Two parts that each hear the other are a cycle the check
+  warns of. To break it, let them both hear a third that tells them (the sample everyone hears),
+  not each other. Where a policy runs is the domain owner's decision, like a type's owner.
 - **A new type is a decision, not a convenience.** Its kind and its owner are the domain owner's to
   decide, before it is written (skill `domain-session`): an **aggregate** because people or policies
   tell it things directly and it is consistent on its own; an **entity** because it has no life

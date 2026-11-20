@@ -82,18 +82,14 @@ Status is one of `open`, `claimed — …`, `blocked — <on what>`.
 - **done when:** the page is usable while a large domain loads, as the Flow board already is while its
   runs are made (`runs.ts`); measured on a domain of about 200 scenarios.
 
-### B-17 A policy runs in a system
+### B-18 The sequence draws a policy where it runs
 - **status:** open
-- **why:** a policy belongs to no part of a system. The context map draws "an event raised in Logistics,
-  a command to Bench" as an arrow from Logistics to Bench. It does so whether Bench subscribes to the
-  event, so Logistics does not know Bench, or Logistics commands Bench. The two couple the parts very
-  differently, and neither the map nor the sequence can tell them apart. Nor can the check warn when one
-  of our own parts commands another that should only hear its events, so a model can drift into its
-  parts calling each other without anyone deciding it.
-- **done when:** a policy can name the part it runs in, decided by an ADR. The context map and the
-  sequence draw an event crossing to the part that reacts to it apart from a command crossing. The check
-  warns on a command between two of our own parts that no declared relation allows. A lab scenario has
-  Bench react to a sample's events in a policy of its own, drawn as Bench subscribing to Logistics.
+- **why:** ADR 0035 places a policy in a part, and the context map uses it. The sequence still draws a
+  policy's command from the lifeline that raised the event to the one it commands. A policy run by a
+  third part, such as Ordering hearing the bench and commanding a transfer, is drawn as the bench
+  commanding the transfer.
+- **done when:** a placed policy is drawn as the event to the part that runs it and the command from
+  there; a lab scenario where a third part runs it shows both arrows; unplaced policies are drawn as today.
 
 ## Later — on the roadmap, not yet started
 

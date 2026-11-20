@@ -241,6 +241,12 @@ through time; what they change stays in their browser. The bundled examples are 
 - **An absent optional list is empty** (ADR 0033): a list that `takes:` declares optional, such as
   `instructions: [Instruction?]`, reads as `[]` when the command leaves it out. `for_each` then walks
   nothing, and `assign` keeps an empty list.
+- **A policy runs in a part** (ADR 0035): `in: Bench` on a policy says which sub-system runs it;
+  `in: target` that each part it commands runs it for its own types (one line for a fan-out over an
+  abstract type), and `in: source` that each part raising its event does. The context map then marks
+  each edge's ends **U** (upstream) and **D** (downstream), lays upstream above, and draws two parts that
+  depend on each other as a warning. The check warns of such a cycle, of a declared relation the policies
+  turn round, and, once one policy is placed, of those that are not.
 - **The docs travel with it:** the domain's `docs/` sources — rules, glossary, questions, profile, the
   sessions' logs (not the generated rulebook) — go into the share, served site and *Open folder…* alike,
   for the **Docs** view (ADR 0016 §9): every topic and its rules, each rule linked to what cites it — a
