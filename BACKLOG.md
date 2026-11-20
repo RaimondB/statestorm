@@ -82,6 +82,19 @@ Status is one of `open`, `claimed — …`, `blocked — <on what>`.
 - **done when:** the page is usable while a large domain loads, as the Flow board already is while its
   runs are made (`runs.ts`); measured on a domain of about 200 scenarios.
 
+### B-17 A policy runs in a system
+- **status:** open
+- **why:** a policy belongs to no part of a system. The context map draws "an event raised in Logistics,
+  a command to Bench" as an arrow from Logistics to Bench. It does so whether Bench subscribes to the
+  event, so Logistics does not know Bench, or Logistics commands Bench. The two couple the parts very
+  differently, and neither the map nor the sequence can tell them apart. Nor can the check warn when one
+  of our own parts commands another that should only hear its events, so a model can drift into its
+  parts calling each other without anyone deciding it.
+- **done when:** a policy can name the part it runs in, decided by an ADR. The context map and the
+  sequence draw an event crossing to the part that reacts to it apart from a command crossing. The check
+  warns on a command between two of our own parts that no declared relation allows. A lab scenario has
+  Bench react to a sample's events in a policy of its own, drawn as Bench subscribing to Logistics.
+
 ## Later — on the roadmap, not yet started
 
 - **B-8 The board view:** EventStorming stickies laid out as a board, clickable to run before it is
