@@ -142,3 +142,30 @@ test("without configuration: a lane per raising type, and misnamed lanes are err
   const bad = loadModel(readFileSync(new URL("models/lab.yaml", examples), "utf8").replace("Clinic / sender: [Collected,", "Clinic / sender: [Colected,"));
   assert.deepEqual(flowConfig(bad).errors, ["overview.flow.lanes.Clinic / sender: the model raises no event called `Colected`, and has no type called that"]);
 });
+
+test("a status the lanes do not name, whose hold reaches the steps through the sample, is drawn where it moved a step", () => {
+  const text = readFileSync(new URL("models/lab.yaml", examples), "utf8");
+  // Missing named in no lane; the deviation tells the sample, and the sample tells each step (ADR 0035):
+  // pending, resolved and confirmed alike.
+  const via = (policy: string, event: string, command: string, hub: string, withs: string) => text.indexOf(`  ${policy}:\n`) >= 0
+    ? [`  ${policy}:`, "    in: Logistics", `    on: ${event}`, `    command: "Sample#\${event.sample}.${command}"`, `    with: ${withs}`,
+      `  ${policy}_steps:`, "    in: target", `    on: ${hub}`].join("\n") : "";
+  let hub = text
+    .replace("Lab: [Received, Rejected, Haemolysed, Missing,", "Lab: [Received, Rejected, Haemolysed,")
+    .replace("          Stop:\n", [
+      "          Hold: { emit: [ SampleHeld: { sample: \"${id}\", event: \"${command.event}\", site: \"${command.site}\" } ] }",
+      "          Release: { emit: [ SampleReleased: { sample: \"${id}\" } ] }",
+      "          Settle: { emit: [ SampleSettled: { sample: \"${id}\", event: \"${command.event}\", site: \"${command.site}\" } ] }",
+      "          Stop:", ""].join("\n"));
+  for (const [policy, event, command, heard, withs] of [
+    ["hold_for_deviation", "DeviationPending", "Hold", "SampleHeld", '{ event: "${event.event}", site: "${event.site}" }'],
+    ["release_on_resolve", "DeviationResolved", "Release", "SampleReleased", "{}"],
+    ["deviation_to_handlings", "DeviationConfirmed", "Settle", "SampleSettled", '{ event: "${event.event}", site: "${event.site}" }'],
+  ] as const) {
+    hub = hub.replace(new RegExp(`  ${policy}:\\n    why: \\[R8\\]\\n    in: target\\n    on: ${event}`), via(policy, event, command, heard, withs));
+  }
+  assert.equal((hub.match(/_steps:\n/g) ?? []).length, 3, "the three routed through the sample");
+  const { graph } = board(loadModel(hub), "lab");
+  assert.deepEqual(graph.nodes.filter((n) => n.event === "Missing").map((n) => n.lane), ["Transport"], "the courier's run it held");
+  assert.deepEqual(graph.left, []);
+});

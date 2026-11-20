@@ -112,14 +112,16 @@ function causes(log: LogEntry[]): Map<number, LogEntry[]> {
 /**
  * The lane of the activity whose step this event moved: down its chain, the first state
  * change of an instance inside an aggregate a lane names — before any further event, or (a
- * deviation, whose hold comes from the deviation it opened) one event further. The aggregate is
- * the one the command was delivered to: an entity counts for the aggregate it is inside.
+ * deviation, whose hold comes from the deviation it opened) one event further, or (a hold the
+ * deviation tells the subject, which tells every step: ADR 0035's hub) two. The nearest reach
+ * that finds one wins. The aggregate is the one the command was delivered to: an entity counts
+ * for the aggregate it is inside.
  */
 function activityLane(model: Model, flow: FlowConfig, byCause: Map<number, LogEntry[]>, seq: number): string | undefined {
   const typed = (flow.lanes ?? []).filter((l) => l.types.length > 0);
   if (typed.length === 0) return undefined;
   const laneOf = (instance: string) => typed.findIndex((l) => l.types.some((t) => isA(model, machineOf(instance), t)));
-  for (const reach of [0, 1]) {
+  for (const reach of [0, 1, 2]) {
     let best = -1;
     const queue: [number, string | undefined, number, number][] = [[seq, undefined, 0, 0]];
     while (queue.length > 0) {
@@ -133,7 +135,7 @@ function activityLane(model: Model, flow: FlowConfig, byCause: Map<number, LogEn
           if (i >= 0 && (best < 0 || i < best)) best = i;
         }
         const h = hops + (next.kind === "event" ? 1 : 0);
-        if (depth < 9 && h <= reach) queue.push([next.seq, agg, depth + 1, h]);
+        if (depth < 13 && h <= reach) queue.push([next.seq, agg, depth + 1, h]);
       }
     }
     if (best >= 0) return typed[best]!.name;
