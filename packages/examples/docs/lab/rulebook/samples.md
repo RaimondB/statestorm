@@ -6,11 +6,11 @@
 
 **Types:** `Sample`, `Scan`, `Deviation`, `SampleDeviation` (packages Samples, Deviations)
 
-**Commands in:** Confirm, Open, Register, Resolve, Scan
+**Commands in:** Confirm, Open, Register, Resolve, Scan, Stop
 
-**Events out:** Analysed, Collected, Delivered, DeviationConfirmed, DeviationPending, DeviationResolved, Haemolysed, Missing, Packed, PickedUp, Queued, Received, Rejected, Released
+**Events out:** Analysed, Collected, Delivered, DeviationConfirmed, DeviationPending, DeviationResolved, Haemolysed, Missing, Packed, PickedUp, Queued, Received, Rejected, Released, SampleHalted
 
-**Policies reacting:** scans_to_handlings (on Collected, Packed, PickedUp, Delivered, Received, Rejected, Queued, Analysed, Released); open_deviation (on Haemolysed, Missing); hold_for_deviation (on DeviationPending); release_on_resolve (on DeviationResolved); deviation_to_handlings (on DeviationConfirmed); patient_collected (on Collected); patient_in_transit (on PickedUp); patient_at_lab (on Received)
+**Policies reacting:** scans_to_handlings (on Collected, Packed, PickedUp, Delivered, Received, Rejected, Queued, Analysed, Released); open_deviation (on Haemolysed, Missing); hold_for_deviation (on DeviationPending); release_on_resolve (on DeviationResolved); deviation_to_handlings (on DeviationConfirmed); sample_stopped (on SampleHalted); patient_collected (on Collected); patient_in_transit (on PickedUp); patient_at_lab (on Received)
 
 [All topics](index.md)
 

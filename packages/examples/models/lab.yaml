@@ -158,7 +158,7 @@ overview:
     Task: "${kind}"
     PatientView: "what the patient sees · ${id}"
   events:
-    hide: ["*Planned", RequestCreated, RequestCompleted, RequestFailed, SampleStopped, PatientInformed,
+    hide: ["*Planned", RequestCreated, RequestCompleted, RequestFailed, SampleStopped, SampleHalted, PatientInformed,
            DeviationPending, DeviationResolved, DeviationConfirmed]
     status: Deviation
   # The flow board: every event that happens to a sample, in the lane where it happens. A status
@@ -738,6 +738,11 @@ aggregates:
             takes: Scan
             guard: command.event == 'Missing'
             emit: [ Missing: { sample: "${id}", request: "${request}", site: "${command.site}", scanId: "${command.scanId}", reason: "${command.reason}" } ]
+          # A step that stopped expecting the sample says so here, and the sample tells every other
+          # step (R3): each part hears the sample, never another part's steps (ADR 0035).
+          Stop:
+            why: [R3]
+            emit: [ SampleHalted: { sample: "${id}", because: "${command.because}" } ]
 
   # ================================================================== deviations
 
@@ -893,22 +898,26 @@ policies:
   # An analysis asks its site what it is — by the id alone: a clinic or a lab (ADR 0028, R17).
   ask_analysis_site:
     why: [R17]
+    in: Bench
     on: AnalysisPlanned
     command: "Site#${event.site}.Describe"
     with: { analysis: "${event.analysis}" }
 
   analysis_site_described:
+    in: Bench
     on: SiteDescribed
     command: "Analysis#${event.analysis}.SiteDescribed"
     with: { site: "${event.site}", kind: "${event.kind}" }
 
   register_samples:
+    in: Ordering
     on: RequestCreated
     for_each: event.samples
     command: "Sample#${item}.Register"
     with: { request: "${event.request}" }
 
   open_patient_view:
+    in: target
     on: RequestCreated
     command: "PatientView#${event.request}.Open"
 
@@ -916,6 +925,7 @@ policies:
   # handling of it gets the scan, and each handling decides what it means.
   scans_to_handlings:
     why: [R7]
+    in: target
     on: [Collected, Packed, PickedUp, Delivered, Received, Rejected, Queued, Analysed, Released]
     for_each_referrer: Handling.sample
     command: "${item}.${eventName}"
@@ -925,6 +935,7 @@ policies:
 
   open_deviation:
     why: [R8]
+    in: Logistics
     on: [Haemolysed, Missing]
     command: "SampleDeviation#${event.scanId}.Open"
     with: { sample: "${event.sample}", event: "${eventName}", site: "${event.site}", reason: "${event.reason}" }
@@ -932,6 +943,7 @@ policies:
   # The deviation is the raiser, so the fan-out names the sample it is about (ADR 0007 §8).
   hold_for_deviation:
     why: [R8]
+    in: target
     on: DeviationPending
     for_each_referrer: { via: Handling.sample, of: "${event.sample}" }
     command: "${item}.DeviationPending"
@@ -939,6 +951,7 @@ policies:
 
   release_on_resolve:
     why: [R8]
+    in: target
     on: DeviationResolved
     for_each_referrer: { via: Handling.sample, of: "${event.sample}" }
     command: "${item}.DeviationResolved"
@@ -946,14 +959,25 @@ policies:
   # Confirmed, it is the status it reported — reaching each step as that status.
   deviation_to_handlings:
     why: [R8]
+    in: target
     on: DeviationConfirmed
     for_each_referrer: { via: Handling.sample, of: "${event.sample}" }
     command: "${item}.${event.event}"
     with: { site: "${event.site}" }
 
+  # A step stopped: its own part tells the sample (R3)...
+  report_stop:
+    why: [R3]
+    in: source
+    on: SampleStopped
+    command: "Sample#${event.sample}.Stop"
+    with: { because: "${event.because}" }
+
+  # ...and every part hears the sample, for its own steps.
   sample_stopped:
     why: [R3]
-    on: SampleStopped
+    in: target
+    on: SampleHalted
     for_each_referrer: { via: Handling.sample, of: "${event.sample}" }
     command: "${item}.SampleStopped"
     with: { because: "${event.because}" }
@@ -961,35 +985,42 @@ policies:
   # ------------------------------------------------------------------ the patient
 
   patient_collected:
+    in: target
     on: Collected
     command: "PatientView#${event.request}.Collected"
 
   patient_in_transit:
+    in: target
     on: PickedUp
     command: "PatientView#${event.request}.InTransit"
 
   patient_at_lab:
+    in: target
     on: Received
     command: "PatientView#${event.request}.AtLab"
 
   patient_ready:
+    in: target
     on: RequestCompleted
     command: "PatientView#${event.request}.Ready"
 
   patient_redraw:
     why: [R16]
+    in: target
     on: RequestFailed
     command: "PatientView#${event.request}.RedrawNeeded"
 
   # A van run booked to its boxes: each is booked (R19); arrived, they are.
   book_boxes:
     why: [R19]
+    in: Logistics
     on: VanRunBooked
     for_each: event.boxes
     command: "CoolBox#${item.box}.BookTo"
     with: { run: "${event.run}" }
 
   boxes_arrive:
+    in: Logistics
     on: VanRunArrived
     for_each: event.boxes
     command: "CoolBox#${item.box}.Arrive"

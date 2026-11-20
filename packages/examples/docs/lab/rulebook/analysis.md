@@ -10,7 +10,7 @@
 
 **Events out:** AnalysisMisplanned, AnalysisPlanned, SampleStopped, StabilityExpired
 
-**Policies reacting:** ask_analysis_site (on AnalysisPlanned); sample_stopped (on SampleStopped)
+**Policies reacting:** ask_analysis_site (on AnalysisPlanned); report_stop (on SampleStopped)
 
 [All topics](index.md)
 

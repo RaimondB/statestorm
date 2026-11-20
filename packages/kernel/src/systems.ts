@@ -10,6 +10,9 @@ import {
 } from "./types.ts";
 
 class SystemsError extends Error {}
+/** ADR 0035: `in: target` — each part a policy commands runs it for its own types; `in: source` — each part that raises its event. */
+const TARGET = "target";
+const SOURCE = "source";
 type Raw = Record<string, unknown>;
 
 function record(v: unknown, where: string): Raw {
@@ -300,7 +303,49 @@ export function systemsOf(rawSystems: unknown, rawContexts: unknown, rawRelation
       throw new SystemsError(`systems: ${a.x.type}.${a.x.command} is worked out inside ${a.by} and sent by ${b.by} too, with values that can be the same — one sender (ADR 0030)`);
     }
   }
+  placementsOf(model, systems, subsystems);
   return { systems, subsystems, domains, contexts, relations, roles };
+}
+
+/** The type a policy's transition commands, when the model says it: a literal `Type#id`, or a referrer's. */
+function targetOf(t: TransitionDef): string | undefined {
+  return t.forEachReferrer?.type ?? (t.command ? literal(t.command.target) : undefined);
+}
+
+/** ADR 0035: each policy's `in:` names a part that runs the model's packages, or `target`. */
+function placementsOf(model: Model, systems: SystemDef[], subsystems: SubsystemDef[]): void {
+  const placed = Object.values(model.policies).filter((p) => p.runsIn !== undefined);
+  if (placed.length === 0) return;
+  for (const word of [TARGET, SOURCE]) {
+    if (subsystems.some((s) => s.name === word)) throw new SystemsError(`a sub-system is called \`${word}\`, and policies say where they run — \`in: ${word}\` is a word of its own (ADR 0035): rename the sub-system`);
+  }
+  const raised = new Set(Object.values(model.aggregates).filter((m) => !m.abstract).flatMap((m) => [...eventsRaisedBy(m)]));
+  for (const p of placed) {
+    const where = `${p.name}: in: ${p.runsIn}`;
+    if (p.runsIn === SOURCE) {
+      walkStates(p.states, (st) => {
+        for (const key of Object.keys(st.on)) {
+          const event = key.split("#")[0]!;
+          if (!raised.has(event)) throw new SystemsError(`${where} — no type of the model raises ${event}, so no part runs it; name the part it runs in`);
+        }
+      });
+      continue;
+    }
+    if (p.runsIn === TARGET) {
+      for (const t of transitionsOf(p)) {
+        const target = targetOf(t);
+        if (t.command && (!target || !model.aggregates[target])) throw new SystemsError(`${where} — the type of \`${t.command.target}\` is worked out at run time; name the part it runs in`);
+      }
+      continue;
+    }
+    const sub = subsystems.find((s) => s.name === p.runsIn);
+    if (!sub) {
+      const sys = systems.find((s) => s.name === p.runsIn);
+      if (sys) throw new SystemsError(`${where} — ${sys.name} is in parts: name one of ${subsystems.filter((s) => s.system === sys.name).map((s) => s.name).join(", ")}`);
+      throw new SystemsError(`${where} — there is no sub-system called ${p.runsIn}`);
+    }
+    if (sub.packages.length === 0) throw new SystemsError(`${where} — ${sub.name} runs none of the model's packages; a policy runs where the model's types do`);
+  }
 }
 
 /** Two sends of one command that some payload could match both. */
@@ -428,6 +473,32 @@ export function systemFindings(model: Model): ModelFinding[] {
   for (const r of sys.roles) {
     if (!sys.subsystems.some((p) => p.plays?.includes(r.name))) out.push({ severity: "warning", message: `role ${r.name}: no part plays it — say \`plays: [${r.name}]\` on the sub-system that does (ADR 0027 §2)` });
   }
+  // ADR 0035: once one policy says where it runs, the model is placing them all.
+  const policies = Object.values(model.policies);
+  const unplaced = policies.filter((p) => p.runsIn === undefined).map((p) => p.name);
+  if (unplaced.length > 0 && unplaced.length < policies.length) {
+    out.push({ severity: "warning", message: `not placed: ${unplaced.slice(0, 12).join(", ")}${unplaced.length > 12 ? ` and ${unplaced.length - 12} more` : ""} — say \`in:\` (ADR 0035)` });
+  }
+  // Two parts that depend on each other, then two systems — where their parts did not already say it.
+  const bySystem = new Set<string>();
+  const systemOf = (sub: string) => sys.subsystems.find((x) => x.name === sub)?.system ?? sub;
+  for (const [level, deps] of [["subsystem", dependencies(model, (p) => p.subsystem)], ["system", dependencies(model, (p) => p.system)]] as const) {
+    for (const [a, ups] of deps) for (const [b, via] of ups) {
+      const back = deps.get(b)?.get(a);
+      if (!back || a > b) continue;
+      const pair = level === "subsystem" ? [systemOf(a), systemOf(b)].sort().join("\u0000") : [a, b].sort().join("\u0000");
+      if (level === "system" && bySystem.has(pair)) continue;
+      bySystem.add(pair);
+      out.push({ severity: "warning", message: `${a} and ${b} depend on each other — ${a} through ${via}, ${b} through ${back}: let one only hear the other (ADR 0035)` });
+    }
+  }
+  // A declared relation the placed policies turn round.
+  const atLevels = [dependencies(model, (p) => p.system), dependencies(model, (p) => p.context), dependencies(model, (p) => p.domain ?? p.system)];
+  for (const r of sys.relations) {
+    const wrong = atLevels.map((d) => d.get(r.upstream)?.get(r.downstream)).find((x) => x !== undefined);
+    const right = atLevels.some((d) => d.get(r.downstream)?.has(r.upstream));
+    if (wrong && !right) out.push({ severity: "warning", message: `relations: ${r.upstream} → ${r.downstream} (${r.pattern}) — the policies make ${r.upstream} depend on ${r.downstream} (${wrong}), not the other way (ADR 0035)` });
+  }
   // An external system is a system and a context of its own: a relation holds at any level.
   const edges = [...contextMap(model, "system").edges, ...contextMap(model, "context").edges, ...(sys.domains.length ? contextMap(model, "domain").edges : [])];
   for (const r of sys.relations) {
@@ -454,7 +525,15 @@ export interface MapNode {
   /** The packages of abstract types a system owns — the shared definitions (ADR 0020 §5). */
   library?: string[];
 }
-export interface MapEdge { from: string; to: string; events: string[]; commands: string[]; patterns: string[] }
+export interface MapEdge {
+  from: string; to: string; events: string[]; commands: string[]; patterns: string[];
+  /** ADR 0035: the policies that carry it. */
+  policies: string[];
+  /** ADR 0035: the end that depends on the other — derived from where its policies run, or a declared relation's. Empty: not known. Both ends: each depends on the other here. */
+  downstream: string[];
+  /** ADR 0035: the two ends depend on each other, through this edge or the one the other way. */
+  mutual?: boolean;
+}
 export interface ContextMap { level: Level; scope?: string; nodes: MapNode[]; edges: MapEdge[] }
 
 /** The lifeline or node a place is drawn as, at a level. Sub-system level is scoped to one system. */
@@ -516,39 +595,72 @@ function nodesAt(model: Model, level: Level, scope?: string): MapNode[] {
 }
 
 /**
- * Edges from the model alone: a policy reacting to an event raised in A that commands a type in B;
- * an external system's commands and the events it receives. Targets computed at run time (a
- * command template naming no type) cannot be placed, and are left out.
+ * ADR 0035: one message crossing between two places, as a policy carries it. `down` is the end that
+ * depends on the other — the one the policy runs in — when the policy is placed.
  */
-export function contextMap(model: Model, level: Level, scope?: string): ContextMap {
-  if (!model.systems) throw new SystemsError("the model declares no `systems:` (ADR 0018)");
-  const nodes = nodesAt(model, level, scope);
-  const at = (type: string) => groupOf(placeOf(model, type), level, scope);
+interface Crossing { from?: Place; to?: Place; event?: string; command?: string; policy: string; down?: "from" | "to" }
+
+function crossingsOf(model: Model): Crossing[] {
   const raisers = new Map<string, string[]>();
   for (const m of Object.values(model.aggregates)) if (!m.abstract) for (const e of eventsRaisedBy(m)) raisers.set(e, [...(raisers.get(e) ?? []), m.name]);
-  const edges = new Map<string, MapEdge>();
-  const add = (from: string, to: string, event?: string, command?: string) => {
-    if (from === to) return;
-    const k = `${from}\u0000${to}`;
-    const e = edges.get(k) ?? { from, to, events: [], commands: [], patterns: [] };
-    if (event && !e.events.includes(event)) e.events.push(event);
-    if (command && !e.commands.includes(command)) e.commands.push(command);
-    edges.set(k, e);
-  };
+  const out: Crossing[] = [];
   for (const p of Object.values(model.policies)) {
+    const sub = p.runsIn && p.runsIn !== TARGET && p.runsIn !== SOURCE ? model.systems!.subsystems.find((s) => s.name === p.runsIn) : undefined;
+    const home = sub ? placeOfSubsystem(model, sub) : undefined;
     walkStates(p.states, (s) => {
       for (const [eventKey, ts] of Object.entries(s.on)) {
         const event = eventKey.split("#")[0]!;
+        const from = (raisers.get(event) ?? []).map((r) => placeOf(model, r));
+        // Placed in a part: the event crosses to it, and its commands cross from it.
+        if (home) for (const r of from) out.push({ from: r, to: home, event, policy: p.name, down: "to" });
         for (const t of ts) {
-          const target = t.forEachReferrer?.type ?? (t.command ? literal(t.command.target) : undefined);
+          const target = targetOf(t);
           if (!target || !model.aggregates[target]) continue;
           const named = t.command ? /\.([^.]+)$/.exec(t.command.target)?.[1] : undefined;
           const name = named === "${eventName}" ? event : named && /^[A-Za-z_][A-Za-z0-9_]*$/.test(named) ? named : undefined;
           const command = name ? `${target}.${name}` : undefined;
-          for (const r of raisers.get(event) ?? []) for (const to of concreteOf(model, target)) add(at(r), at(to), event, command);
+          for (const to of concreteOf(model, target).map((c) => placeOf(model, c))) {
+            if (home) out.push({ from: home, to, ...(command ? { command } : {}), policy: p.name, down: "from" });
+            // Run by each part it commands: only the event crosses, heard there (ADR 0035 §2).
+            else if (p.runsIn === TARGET) for (const r of from) out.push({ from: r, to, event, policy: p.name, down: "to" });
+            // Run by each part that raises the event: only the command crosses, sent from there.
+            else if (p.runsIn === SOURCE) for (const r of from) out.push({ from: r, to, ...(command ? { command } : {}), policy: p.name, down: "from" });
+            else for (const r of from) out.push({ from: r, to, event, ...(command ? { command } : {}), policy: p.name });
+          }
         }
       }
     });
+  }
+  return out;
+}
+
+/**
+ * Edges from the model alone: a policy reacting to an event raised in A that commands a type in B;
+ * an external system's commands and the events it receives. Targets computed at run time (a
+ * command template naming no type) cannot be placed, and are left out. Where the policy runs, the
+ * edge says which end depends on the other (ADR 0035).
+ */
+export function contextMap(model: Model, level: Level, scope?: string): ContextMap {
+  if (!model.systems) throw new SystemsError("the model declares no `systems:` (ADR 0018)");
+  const nodes = nodesAt(model, level, scope);
+  const group = (p: Place | undefined) => groupOf(p, level, scope);
+  const at = (type: string) => group(placeOf(model, type));
+  const raisers = new Map<string, string[]>();
+  for (const m of Object.values(model.aggregates)) if (!m.abstract) for (const e of eventsRaisedBy(m)) raisers.set(e, [...(raisers.get(e) ?? []), m.name]);
+  const edges = new Map<string, MapEdge>();
+  const add = (from: string, to: string, event?: string, command?: string, policy?: string, down?: string) => {
+    if (from === to) return;
+    const k = `${from}\u0000${to}`;
+    const e = edges.get(k) ?? { from, to, events: [], commands: [], patterns: [], policies: [], downstream: [] };
+    if (event && !e.events.includes(event)) e.events.push(event);
+    if (command && !e.commands.includes(command)) e.commands.push(command);
+    if (policy && !e.policies.includes(policy)) e.policies.push(policy);
+    if (down && !e.downstream.includes(down)) e.downstream.push(down);
+    edges.set(k, e);
+  };
+  for (const c of crossingsOf(model)) {
+    const from = group(c.from), to = group(c.to);
+    add(from, to, c.event, c.command, c.policy, c.down === "from" ? from : c.down === "to" ? to : undefined);
   }
   for (const part of model.systems.subsystems.filter((s) => s.external)) {
     const from = groupOf(placeOfSubsystem(model, part), level, scope);
@@ -556,11 +668,29 @@ export function contextMap(model: Model, level: Level, scope?: string): ContextM
     for (const e of part.receives ?? []) for (const r of raisers.get(e) ?? []) add(at(r), from, e);
   }
   const list = [...edges.values()];
+  // Each depends on the other: an edge either way between them that says so (ADR 0035 §5).
+  const depends = new Set(list.flatMap((e) => e.downstream.map((d) => `${d}\u0000${d === e.from ? e.to : e.from}`)));
+  for (const e of list) if (depends.has(`${e.from}\u0000${e.to}`) && depends.has(`${e.to}\u0000${e.from}`)) e.mutual = true;
   for (const r of model.systems.relations) {
-    const e = list.find((x) => (x.from === r.upstream && x.to === r.downstream) || (x.from === r.downstream && x.to === r.upstream));
-    if (e) e.patterns.push(r.pattern);
+    const between = list.filter((x) => (x.from === r.upstream && x.to === r.downstream) || (x.from === r.downstream && x.to === r.upstream));
+    between[0]?.patterns.push(r.pattern);
+    // What the policies do not say, a declared relation does (ADR 0035 §4).
+    for (const e of between) if (e.downstream.length === 0) e.downstream.push(r.downstream);
   }
   return { level, ...(scope ? { scope } : {}), nodes, edges: list };
+}
+
+/** ADR 0035: the parts each depends on, at a level — from the placed policies only. */
+function dependencies(model: Model, key: (p: Place) => string): Map<string, Map<string, string>> {
+  const out = new Map<string, Map<string, string>>();
+  for (const c of crossingsOf(model)) {
+    if (!c.down || !c.from || !c.to) continue;
+    const [down, up] = c.down === "from" ? [key(c.from), key(c.to)] : [key(c.to), key(c.from)];
+    if (down === up) continue;
+    const m = out.get(down) ?? out.set(down, new Map()).get(down)!;
+    if (!m.has(up)) m.set(up, c.policy);
+  }
+  return out;
 }
 
 // ------------------------------------------------------------------ who sends a command from outside
@@ -676,7 +806,8 @@ export function contextMapToMermaid(m: ContextMap): string {
   }
   for (const e of m.edges) {
     const said = [...e.events, ...e.commands.filter((c) => !e.events.includes(c)).map((c) => `${c}()`)];
-    const what = [...e.patterns.map((p) => `«${p}»`), ...said.slice(0, 4), ...(said.length > 4 ? [`+${said.length - 4} more`] : [])].join(", ");
+    const ends = e.downstream.length === 2 ? "D ↔ D" : e.downstream[0] === e.to ? "U → D" : e.downstream[0] === e.from ? "D → U" : "";
+    const what = [...(ends ? [ends] : []), ...e.patterns.map((p) => `«${p}»`), ...said.slice(0, 4), ...(said.length > 4 ? [`+${said.length - 4} more`] : [])].join(", ");
     lines.push(`  ${mid(e.from)} -->|"${what}"| ${mid(e.to)}`);
   }
   return lines.join("\n") + "\n";

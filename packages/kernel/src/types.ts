@@ -339,6 +339,11 @@ export interface MachineDef {
   correlate?: string;
   /** ADR 0016: the ids of the domain's rules it implements, as written on it (not inherited). */
   why?: string[];
+  /**
+   * Policies only, ADR 0035: the sub-system it runs in, or `target` — each part it commands runs it for
+   * its own types. Absent: not placed.
+   */
+  runsIn?: string;
   /** Every child trigger anywhere in the machine, with the state that owns it. */
   allChildTriggers: { state: StatePath; trigger: ChildTrigger }[];
 }
