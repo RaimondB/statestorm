@@ -14,7 +14,7 @@ import { readModel, readModelFiles, readScenario } from "@statestorm/scenarios/f
 import { buildFlow, flowConfig } from "../flow.ts";
 import { REFERENCE, referencesOf } from "../groups.ts";
 import { eventNames, overviewConfig } from "../overview.ts";
-import { assignScenarios, compareDrawings, issuesMarkdown, offDrawing, parseDrawing, parseIssues, tagFindings } from "./drawings.ts";
+import { assignScenarios, compareDrawings, issuesMarkdown, offDrawing, parseDrawing, parseIssues, statusesTold, tagFindings } from "./drawings.ts";
 import { coverage } from "./coverage.ts";
 import { contributions } from "./contribution.ts";
 import { unanswered } from "./unanswered.ts";
@@ -362,24 +362,10 @@ export async function check(args: string[]): Promise<number> {
     // Which statuses led to telling the customer: an event whose consequences include the notice.
     const subjectTypes = flowConfig(model).flow.of ?? Object.keys(model.aggregates);
     const statuses = new Set(eventNames(model));
+    const hidden = overviewConfig(model).config.hideEvents;
     const toldOf = (prefixes: string[] | undefined, notice: string) => {
       const told = new Set<string>();
-      for (const r of runsOf(prefixes)) {
-        const bySeq = new Map(r.log.map((e) => [e.seq, e]));
-        for (const e of r.log) {
-          if (e.kind !== "event" || e.event !== notice) continue;
-          for (let at = e.cause, hops = 0; at > 0 && hops < 60; hops++) {
-            const c = bySeq.get(at);
-            if (!c) break;
-            if (c.kind === "event" && subjectTypes.some((t) => isA(model, c.instance.slice(0, c.instance.indexOf("#")), t))) { told.add(c.event); break; }
-            // An event that names a status (a deviation confirmed, carrying the status it reported)
-            // tells for that status: the person's confirmation is not the reason.
-            const named = c.kind === "event" ? Object.values(c.payload).find((v) => typeof v === "string" && statuses.has(v)) : undefined;
-            if (typeof named === "string") { told.add(named); break; }
-            at = c.cause;
-          }
-        }
-      }
+      for (const r of runsOf(prefixes)) for (const s of statusesTold(model, r.log, notice, subjectTypes, statuses, hidden)) told.add(s);
       return told;
     };
     const evOf = (id: string) => id.slice(0, id.lastIndexOf("@"));

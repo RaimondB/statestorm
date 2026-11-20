@@ -5,8 +5,8 @@ import { parse as parseYaml } from "yaml";
 import { loadModel } from "@statestorm/kernel";
 import { parseScenario, runScenario } from "@statestorm/scenarios";
 import { buildFlow, flowConfig } from "../src/flow.ts";
-import { overviewConfig } from "../src/overview.ts";
-import { assignScenarios, compareDrawings, issuesMarkdown, parseDrawing, parseIssues } from "../src/check/drawings.ts";
+import { eventNames, overviewConfig } from "../src/overview.ts";
+import { assignScenarios, compareDrawings, issuesMarkdown, parseDrawing, parseIssues, statusesTold } from "../src/check/drawings.ts";
 import { coverage } from "../src/check/coverage.ts";
 import { contributions } from "../src/check/contribution.ts";
 import { unanswered } from "../src/check/unanswered.ts";
@@ -246,4 +246,18 @@ test("ADR 0027 §5: the events that move what another role works, the roll-ups l
   assert.ok(!found.some((c) => c.moved === "SiteVisit" || c.moved === "SiteTask"), found.map((c) => c.moved).join(", "));
   // Each one is a crossing indeed.
   for (const c of found) assert.notEqual(c.owner, c.movedRole);
+});
+
+test("the status that told the customer: a subject's hidden event is its plumbing — it tells for the status it names (ADR 0035)", () => {
+  const lab = loadModel(readFileSync(new URL("../../examples/models/lab.yaml", import.meta.url), "utf8"));
+  // Missing confirmed; the deviation tells the sample, the sample tells every step, a step tells the patient.
+  const log = [
+    { seq: 1, cause: 0, kind: "event", instance: "Sample#S1", event: "Missing", payload: { sample: "S1" } },
+    { seq: 2, cause: 1, kind: "event", instance: "SampleDeviation#d1", event: "DeviationConfirmed", payload: { sample: "S1", event: "Missing" } },
+    { seq: 3, cause: 2, kind: "event", instance: "Sample#S1", event: "SampleSettled", payload: { sample: "S1", event: "Missing" } },
+    { seq: 4, cause: 3, kind: "event", instance: "PatientView#R1", event: "PatientInformed", payload: { about: "a new sample is needed" } },
+  ] as unknown as Parameters<typeof statusesTold>[1];
+  const statuses = new Set(eventNames(lab));
+  assert.deepEqual([...statusesTold(lab, log, "PatientInformed", ["Sample"], statuses, ["SampleSettled"])], ["Missing"]);
+  assert.deepEqual([...statusesTold(lab, log, "PatientInformed", ["Sample"], statuses, [])], ["SampleSettled"], "not hidden: the sample's own status");
 });
