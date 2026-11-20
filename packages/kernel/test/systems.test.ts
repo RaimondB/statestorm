@@ -152,6 +152,9 @@ test("the map says which end depends on the other (ADR 0035): heard, sent, run b
   // in: target — each part hears the sample's scans for its own handlings: only the event crosses.
   assert.ok(edge("Logistics", "Ordering").policies.includes("scans_to_handlings"));
   assert.deepEqual(edge("Logistics", "Ordering").commands, [], "the command stays in the part that runs it");
+  // ...and a part hears only the scans one of its handlings answers: the bench's analysis no pickup.
+  assert.deepEqual(edge("Logistics", "Bench").events.filter((e) => ["Collected", "Packed", "PickedUp", "Delivered", "Received", "Analysed"].includes(e)), ["Received", "Analysed"]);
+  assert.deepEqual(edge("Logistics", "Ordering").events.filter((e) => ["Collected", "Packed", "PickedUp", "Delivered", "Received", "Analysed"].includes(e)), ["Collected"]);
   // in: source — each part tells the sample of its own stopped step.
   assert.ok(edge("Ordering", "Logistics").policies.includes("report_stop"));
   assert.deepEqual(edge("Ordering", "Logistics").downstream, ["Ordering"]);

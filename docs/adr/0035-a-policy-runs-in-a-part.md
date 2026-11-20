@@ -95,6 +95,14 @@ policy, each part ends up depending on each of the others.
    downstream (`MapEdge.downstream`, one end or, when each depends on the other on that edge, both). It
    lists the policies that carry it (`MapEdge.policies`). Under `in: target` only the event crosses; the
    command stays inside the part that runs it.
+
+   **A part hears only what one of its types answers.** A policy over an abstract type reaches every
+   subtype, but a subtype that has no answer to the command ignores it. So nothing crosses to its part
+   for it. `scans_to_handlings` hears nine scans, and the bench's analysis answers only the ones at the
+   lab. So the edge from Logistics to Bench lists `Received` and `Analysed`, not `Collected` or
+   `PickedUp`. A part is not drawn as depending on events it never uses, and a cycle through a command
+   nobody answers is no cycle. A command whose name is worked out at run time reaches every subtype, as
+   before.
 4. **When the map does not know, it says nothing.** A policy without `in:` is drawn as before, from the
    raiser to the target, with neither end marked downstream. An external system's edges, made from its
    `sends:` and `receives:`, are marked only by a declared relation: the model cannot tell whether the

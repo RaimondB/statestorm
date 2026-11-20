@@ -619,7 +619,9 @@ function crossingsOf(model: Model): Crossing[] {
           const named = t.command ? /\.([^.]+)$/.exec(t.command.target)?.[1] : undefined;
           const name = named === "${eventName}" ? event : named && /^[A-Za-z_][A-Za-z0-9_]*$/.test(named) ? named : undefined;
           const command = name ? `${target}.${name}` : undefined;
-          for (const to of concreteOf(model, target).map((c) => placeOf(model, c))) {
+          // A subtype that has no answer to the command ignores it: nothing crosses to its part for it.
+          const answering = concreteOf(model, target).filter((c) => !name || commandsAnsweredBy(model.aggregates[c]!).has(name));
+          for (const to of answering.map((c) => placeOf(model, c))) {
             if (home) out.push({ from: home, to, ...(command ? { command } : {}), policy: p.name, down: "from" });
             // Run by each part it commands: only the event crosses, heard there (ADR 0035 §2).
             else if (p.runsIn === TARGET) for (const r of from) out.push({ from: r, to, event, policy: p.name, down: "to" });
