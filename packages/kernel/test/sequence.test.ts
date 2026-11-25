@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { loadModel } from "../src/model.ts";
 import { createWorld, send } from "../src/engine.ts";
 import { PERSON } from "../src/systems.ts";
+import { contextMap } from "../src/systems.ts";
 import { lifelineNamed, lifelinesOf, listText, messageText, openAt, sequenceOf, sequenceToMermaid, type Sequence, type SequenceItem, type SequenceView } from "../src/sequence.ts";
 import { parseScenario, runScenario } from "../../scenarios/src/index.ts";
 import { fileURLToPath } from "node:url";
@@ -249,4 +250,134 @@ test("an arrow says the fields the model declares, and the instances it reached 
   refused("Nothing: [x]", /`Nothing` is no command \(Type.Command\) and no event the model raises/);
   refused("PatientInformed: [colour]", /`colour` is not among its fields \(about\)/);
   refused("Sample.Scan: []", /name the fields its arrow shows/);
+});
+
+// ADR 0038: a policy drawn where it runs. Billing runs the reservation between the shop and the
+// warehouse; the shop notes the order itself; the warehouse hears the order for its picking list; the
+// receipt is placed nowhere.
+const PLACED = `
+context: T
+aggregates:
+  Order:
+    creators: [Place]
+    initial: open
+    states:
+      open:
+        on:
+          Place: { emit: [ Placed: { order: "\${id}", lines: "\${command.lines}" } ] }
+  Invoice:
+    creators: [Open]
+    initial: open
+    states: { open: { on: { Open: {} } } }
+  Item:
+    creators: [Reserve]
+    initial: reserved
+    states: { reserved: { on: { Reserve: {} } } }
+  Ledger:
+    creators: [Note]
+    initial: open
+    states: { open: { on: { Note: {} } } }
+  PickList:
+    creators: [Add]
+    initial: open
+    states: { open: { on: { Add: {} } } }
+  Receipt:
+    creators: [Print]
+    initial: open
+    states: { open: { on: { Print: {} } } }
+policies:
+  reserve:
+    in: Billing
+    on: Placed
+    for_each: event.lines
+    command: "Item#\${item}.Reserve"
+  note:
+    in: source
+    on: Placed
+    command: "Ledger#L.Note"
+  pick:
+    in: target
+    on: Placed
+    command: "PickList#P.Add"
+  receipt:
+    on: Placed
+    command: "Receipt#R.Print"
+packages:
+  Selling: [Order]
+  Invoicing: [Invoice]
+  Stock: [Item, Ledger, PickList]
+  Printing: [Receipt]
+systems:
+  Shop: { packages: [Selling] }
+  Billing: { packages: [Invoicing] }
+  Warehouse: { packages: [Stock] }
+  Printer: { packages: [Printing] }
+`;
+const placed = loadModel(PLACED);
+const placedAt = (depth: "system" | "aggregate") => {
+  const w = createWorld(placed, "2026-01-01T09:00:00Z", { kind: "fifo" });
+  send(w, "Order#O1.Place", { lines: ["A", "B"] });
+  return sequenceOf(placed, w.log, { open: openAt(lifelinesOf(placed), depth), fold: false });
+};
+const arrows = (s: Sequence) => messages(s).map((m) => `${m.style === "command" ? "->>" : "--)"} ${m.from} → ${m.to}: ${m.label}`);
+
+test("a policy is drawn where it runs (ADR 0038): run by a third, the event to it and the command from it; run where raised, the command alone", () => {
+  const s = placedAt("system");
+  const lines = arrows(s);
+  // Billing runs the reservation for the other two: the order is heard there, once, then each line commanded.
+  assert.ok(lines.includes("--) system:Shop → system:Billing: Placed"), "the event, to the part that runs the policy");
+  assert.equal(lines.filter((l) => l === "->> system:Billing → system:Warehouse: Item.Reserve").length, 2, "a command from there, per line");
+  const heard = messages(s).find((m) => m.to === "system:Billing")!;
+  assert.deepEqual([heard.event, heard.policy], ["Placed", "reserve"]);
+  // In causal order (ADR 0022): what the heard event caused follows it — both commands, nothing between.
+  const i = lines.indexOf("--) system:Shop → system:Billing: Placed");
+  assert.deepEqual(lines.slice(i + 1, i + 3), ["->> system:Billing → system:Warehouse: Item.Reserve", "->> system:Billing → system:Warehouse: Item.Reserve"]);
+  // Run where the event was raised (fan-in): the event stays inside the shop, only the command crosses.
+  assert.ok(lines.includes("->> system:Shop → system:Warehouse: Ledger.Note"));
+  // Run by the part it commands (fan-out): the event crosses, as before.
+  assert.ok(lines.includes("--) system:Shop → system:Warehouse: Placed → PickList.Add"));
+  // Placed nowhere: drawn as before, the event becoming the command.
+  assert.ok(lines.includes("--) system:Shop → system:Printer: Placed → Receipt.Print"));
+  assert.match(sequenceToMermaid(s), /system_Billing->>system_Warehouse: Item\.Reserve/);
+});
+
+test("opened down to its aggregates, a part that runs a policy for two others shows it a lifeline of its own (ADR 0038)", () => {
+  const lines = lifelinesOf(placed);
+  assert.deepEqual(lines.nodes["system:Billing"]!.children, ["aggregate:Invoice", "policies:Billing/Billing"]);
+  assert.equal(lines.nodes["system:Warehouse"]!.children.some((c) => c.startsWith("policies:")), false, "the warehouse runs only its own");
+  const said_ = arrows(placedAt("aggregate"));
+  assert.ok(said_.includes("--) aggregate:Order → policies:Billing/Billing: Placed"));
+  assert.ok(said_.includes("->> policies:Billing/Billing → aggregate:Item: Item.Reserve"));
+  assert.ok(said_.includes("->> aggregate:Order → aggregate:Ledger: Ledger.Note"), "run where raised: on the raiser's lifeline");
+});
+
+test("the lab's placed policies in its sequence (ADR 0038): run where raised, a command; run by the part it commands, an event", () => {
+  const lines = arrows(sequence("01-two-tubes-to-the-lab", { open: openAt(lifelinesOf(lab), "subsystem"), fold: false }));
+  // The request's part registers the samples itself (in: Ordering): only the command reaches Logistics.
+  assert.ok(lines.includes("->> subsystem:Lab/Ordering → subsystem:Lab/Logistics: Sample.Register"));
+  assert.ok(!lines.some((l) => l.includes("RequestCreated → Sample.Register")));
+  // The bench asks the site itself (in: Bench).
+  assert.ok(lines.some((l) => /^->> subsystem:Lab\/Bench → subsystem:Lab\/Logistics: \w+\.Describe$/.test(l)));
+  // Each part hears the sample's scans for its own handlings (in: target): the event crosses, as before.
+  assert.ok(lines.some((l) => /^--\) subsystem:Lab\/Logistics → subsystem:Lab\/(Ordering|Bench): Received → /.test(l)));
+});
+
+test("what crosses says how it is drawn (ADR 0038): heard, sent, or carried by a policy placed nowhere — red", () => {
+  const edges = contextMap(placed, "system").edges;
+  const edge = (from: string, to: string) => edges.find((e) => e.from === from && e.to === to)!;
+  assert.deepEqual([edge("Shop", "Billing").heard, edge("Shop", "Billing").sends], [["Placed"], []], "heard by the part that runs it");
+  assert.deepEqual([edge("Billing", "Warehouse").heard, edge("Billing", "Warehouse").sends], [[], ["Item.Reserve"]], "sent from there");
+  const both = edge("Shop", "Warehouse");
+  assert.deepEqual([both.heard, both.sends], [["Placed"], ["Ledger.Note"]], "one edge, drawn as two: the warehouse hears, the shop sends");
+  assert.deepEqual(edge("Shop", "Printer").unplaced, { events: ["Placed"], commands: ["Receipt.Print"], policies: ["receipt"] });
+  assert.deepEqual(edge("Shop", "Printer").heard, [], "red, not orange");
+  const receipt = messages(placedAt("system")).find((m) => m.policy === "receipt")!;
+  assert.equal(receipt.unplaced, true);
+  assert.equal(messages(placedAt("system")).find((m) => m.policy === "reserve")!.unplaced, undefined);
+  // A model that places none is not placing yet: nothing is red (ADR 0035 §6).
+  const none = loadModel(PLACED.replace(/\n    in: [a-zA-Z]+/g, ""));
+  assert.ok(contextMap(none, "system").edges.every((e) => e.unplaced.policies.length === 0));
+  const w = createWorld(none, "2026-01-01T09:00:00Z", { kind: "fifo" });
+  send(w, "Order#O1.Place", { lines: ["A"] });
+  assert.ok(messages(sequenceOf(none, w.log, { open: openAt(lifelinesOf(none), "system") })).every((m) => !m.unplaced));
 });

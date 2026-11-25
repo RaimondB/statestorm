@@ -82,15 +82,6 @@ Status is one of `open`, `claimed — …`, `blocked — <on what>`.
 - **done when:** the page is usable while a large domain loads, as the Flow board already is while its
   runs are made (`runs.ts`); measured on a domain of about 200 scenarios.
 
-### B-18 The sequence draws a policy where it runs
-- **status:** open
-- **why:** ADR 0035 places a policy in a part, and the context map uses it. The sequence still draws a
-  policy's command from the lifeline that raised the event to the one it commands. A policy run by a
-  third part, such as Ordering hearing the bench and commanding a transfer, is drawn as the bench
-  commanding the transfer.
-- **done when:** a placed policy is drawn as the event to the part that runs it and the command from
-  there; a lab scenario where a third part runs it shows both arrows; unplaced policies are drawn as today.
-
 ## Later — on the roadmap, not yet started
 
 - **B-8 The board view:** EventStorming stickies laid out as a board, clickable to run before it is

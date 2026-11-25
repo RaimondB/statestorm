@@ -11,7 +11,26 @@ import { estimate, type Measure } from "./chart-layout.ts";
 export const MAP = { pad: 12, line: 16, minW: 120 };
 
 export interface PlacedNode extends MapNode { x: number; y: number; width: number; height: number; lines: string[] }
-export interface PlacedEdge extends MapEdge { points: { x: number; y: number }[]; label?: { x: number; y: number; width: number; height: number; text: string } }
+/** ADR 0038: an edge as drawn — events heard (orange, dashed), commands sent (blue, solid), or what policies placed nowhere carry (red). */
+export type EdgeKind = "event" | "command" | "unplaced";
+export interface DrawnEdge extends MapEdge { kind: EdgeKind }
+export interface PlacedEdge extends DrawnEdge { points: { x: number; y: number }[]; label?: { x: number; y: number; width: number; height: number; text: string } }
+
+/**
+ * ADR 0038: one map edge drawn as what crosses it, apart — the events heard (and what an unplaced
+ * policy's event became, in a model not placing yet), the commands sent, and what unplaced policies
+ * carry. The declared patterns go with the first; who depends on whom with each, but the unplaced.
+ */
+export function drawnEdges(edges: MapEdge[]): DrawnEdge[] {
+  return edges.flatMap((e) => {
+    const out: DrawnEdge[] = [];
+    const became = e.commands.filter((c) => !e.sends.includes(c) && !e.unplaced.commands.includes(c));
+    if (e.heard.length) out.push({ ...e, kind: "event", events: e.heard, commands: became });
+    if (e.sends.length) out.push({ ...e, kind: "command", events: [], commands: e.sends, patterns: out.length ? [] : e.patterns });
+    if (e.unplaced.policies.length) out.push({ ...e, kind: "unplaced", events: e.unplaced.events, commands: e.unplaced.commands, policies: e.unplaced.policies, downstream: [], patterns: out.length ? [] : e.patterns });
+    return out.length ? out : [{ ...e, kind: "event" }];
+  });
+}
 
 /** Laid out against the way it travels: its one downstream end is where its messages start (a command sent from there). */
 const upward = (e: MapEdge) => e.downstream.length === 1 && e.downstream[0] === e.from;
@@ -39,6 +58,7 @@ export function labelOf(e: MapEdge): string {
 export async function layoutMap(map: ContextMap, measure: Measure = estimate): Promise<MapLayout> {
   const { default: ELK } = await import("elkjs/lib/elk.bundled.js");
   const elk = new ELK();
+  const drawn = drawnEdges(map.edges);
   const sized = map.nodes.map((n) => {
     const lines = linesOf(n);
     const width = Math.max(MAP.minW, measure(n.id, "title") + 2 * MAP.pad, ...lines.map((l) => measure(l, "label") + 2 * MAP.pad));
@@ -57,7 +77,7 @@ export async function layoutMap(map: ContextMap, measure: Measure = estimate): P
       "elk.padding": "[top=20,left=20,bottom=20,right=20]",
     },
     children: sized.map((n) => ({ id: n.id, width: n.width, height: n.height })),
-    edges: map.edges.map((e, i): ElkExtendedEdge => {
+    edges: drawn.map((e, i): ElkExtendedEdge => {
       const text = labelOf(e);
       return { id: `e${i}`, sources: [upward(e) ? e.to : e.from], targets: [upward(e) ? e.from : e.to], labels: text ? [{ id: `l${i}`, text, width: measure(text, "label") + 8, height: 16 }] : [] };
     }),
@@ -65,7 +85,7 @@ export async function layoutMap(map: ContextMap, measure: Measure = estimate): P
   const out = await elk.layout(graph);
   const at = new Map((out.children ?? []).map((c) => [c.id, c]));
   const nodes: PlacedNode[] = sized.map((n) => ({ ...n, x: at.get(n.id)?.x ?? 0, y: at.get(n.id)?.y ?? 0 }));
-  const edges: PlacedEdge[] = map.edges.map((e, i) => {
+  const edges: PlacedEdge[] = drawn.map((e, i) => {
     const laid = (out.edges ?? []).find((x) => x.id === `e${i}`) as ElkExtendedEdge | undefined;
     const s = laid?.sections?.[0];
     const laidOut = s ? [s.startPoint, ...(s.bendPoints ?? []), s.endPoint] : [];

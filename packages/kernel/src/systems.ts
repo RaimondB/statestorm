@@ -537,6 +537,14 @@ export interface MapEdge {
   downstream: string[];
   /** ADR 0035: the two ends depend on each other, through this edge or the one the other way. */
   mutual?: boolean;
+  /**
+   * ADR 0038: what crosses, as drawn — the events heard across it (a placed policy's, an external part's);
+   * the commands sent across it (a placed policy's, from where it runs; an external part's); and what
+   * policies placed nowhere carry, in a model that places some (drawn red: they need a place).
+   */
+  heard: string[];
+  sends: string[];
+  unplaced: { events: string[]; commands: string[]; policies: string[] };
 }
 export interface ContextMap { level: Level; scope?: string; nodes: MapNode[]; edges: MapEdge[] }
 
@@ -669,19 +677,22 @@ function edgesBy(model: Model, group: (p: Place | undefined) => string, nameOf: 
   const raisers = new Map<string, string[]>();
   for (const m of Object.values(model.aggregates)) if (!m.abstract) for (const e of eventsRaisedBy(m)) raisers.set(e, [...(raisers.get(e) ?? []), m.name]);
   const edges = new Map<string, MapEdge>();
-  const add = (from: string, to: string, event?: string, command?: string, policy?: string, down?: string) => {
+  const placing = placesPolicies(model);
+  const add = (from: string, to: string, event?: string, command?: string, policy?: string, down?: string, loose = false) => {
     if (from === to) return;
     const k = `${from}\u0000${to}`;
-    const e = edges.get(k) ?? { from, to, events: [], commands: [], patterns: [], policies: [], downstream: [] };
-    if (event && !e.events.includes(event)) e.events.push(event);
-    if (command && !e.commands.includes(command)) e.commands.push(command);
-    if (policy && !e.policies.includes(policy)) e.policies.push(policy);
-    if (down && !e.downstream.includes(down)) e.downstream.push(down);
+    const e = edges.get(k) ?? { from, to, events: [], commands: [], patterns: [], policies: [], downstream: [], heard: [], sends: [], unplaced: { events: [], commands: [], policies: [] } };
+    const put = (xs: string[], x?: string) => { if (x && !xs.includes(x)) xs.push(x); };
+    put(e.events, event); put(e.commands, command); put(e.policies, policy); put(e.downstream, down);
+    // ADR 0038: as drawn — red where the model places others and not this one, else heard or sent.
+    if (loose) { put(e.unplaced.events, event); put(e.unplaced.commands, command); put(e.unplaced.policies, policy); }
+    else if (command && !event) put(e.sends, command);
+    else put(e.heard, event);
     edges.set(k, e);
   };
   for (const c of crossingsOf(model)) {
     const from = group(c.from), to = group(c.to);
-    add(from, to, c.event, c.command, c.policy, c.down === "from" ? from : c.down === "to" ? to : undefined);
+    add(from, to, c.event, c.command, c.policy, c.down === "from" ? from : c.down === "to" ? to : undefined, placing && c.down === undefined);
   }
   for (const part of sys.subsystems.filter((s) => s.external)) {
     const from = group(placeOfSubsystem(model, part));
@@ -700,6 +711,11 @@ function edgesBy(model: Model, group: (p: Place | undefined) => string, nameOf: 
     for (const e of between) if (e.downstream.length === 0) e.downstream.push(nameOf(e.from) === r.downstream ? e.from : e.to);
   }
   return list;
+}
+
+/** ADR 0035 §6, ADR 0038: once a model places one policy, it is placing them all — the rest are unplaced. */
+export function placesPolicies(model: Model): boolean {
+  return Object.values(model.policies).some((p) => p.runsIn !== undefined);
 }
 
 /** ADR 0035: the parts each depends on, at a level — from the placed policies only. */

@@ -22,3 +22,20 @@ test("the map lays upstream above downstream, and draws each edge the way its me
   assert.deepEqual(endsOf(heard).map((x) => x.text), ["U", "D"]);
   assert.deepEqual(endsOf(laid.edges.find((e) => e.from === "Scanners")!), [], "an outside system's edge: nothing known, nothing drawn");
 });
+
+test("an edge is drawn as what crosses it, apart (ADR 0038): events heard, commands sent, what unplaced policies carry", async () => {
+  const { drawnEdges } = await import("../src/context-map.ts");
+  const edge = {
+    from: "Shop", to: "Warehouse", events: ["Placed"], commands: ["Ledger.Note", "Receipt.Print"], patterns: ["customer-supplier"], policies: ["pick", "note", "receipt"],
+    downstream: ["Warehouse"], heard: ["Placed"], sends: ["Ledger.Note"], unplaced: { events: ["Placed"], commands: ["Receipt.Print"], policies: ["receipt"] },
+  };
+  const drawn = drawnEdges([edge]);
+  assert.deepEqual(drawn.map((d) => [d.kind, d.events, d.commands]), [
+    ["event", ["Placed"], []], ["command", [], ["Ledger.Note"]], ["unplaced", ["Placed"], ["Receipt.Print"]],
+  ]);
+  assert.deepEqual(drawn.map((d) => d.patterns.length), [1, 0, 0], "the declared pattern once");
+  assert.deepEqual(drawn[2]!.downstream, [], "placed nowhere: nobody known to depend");
+  // In a model not placing yet, an event is drawn with what it became — one orange edge, as before.
+  const notYet = { ...edge, sends: [], unplaced: { events: [], commands: [], policies: [] }, commands: ["Receipt.Print"] };
+  assert.deepEqual(drawnEdges([notYet]).map((d) => [d.kind, d.commands]), [["event", ["Receipt.Print"]]]);
+});

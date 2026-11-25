@@ -184,6 +184,7 @@ export function Sequence({ model, run, index, onIndex, state, onState, select }:
         <span className="ov-legend">
           <span><svg width="40" height="10"><line x1="2" y1="5" x2="38" y2="5" className="seq-arrow command" /></svg> command</span>
           <span><svg width="40" height="10"><line x1="2" y1="5" x2="38" y2="5" className="seq-arrow event" /></svg> event, and what it became</span>
+          <span title="Carried by a policy placed nowhere: say where it runs (in:, ADR 0035)"><svg width="40" height="10"><line x1="2" y1="5" x2="38" y2="5" className="seq-arrow event unplaced" /></svg> not placed</span>
           <span><span className="seq-key loop" /> a model loop</span>
           <span><span className="seq-key repeat" /> the run repeating itself</span>
           <span className="hint">▸ opens a lifeline or a fold · click a message or a lifeline to see it in the inspector</span>
@@ -256,6 +257,7 @@ export function Sequence({ model, run, index, onIndex, state, onState, select }:
               <defs>
                 <marker id="seq-head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" className="seq-head" /></marker>
                 <marker id="seq-open" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10" className="seq-open" /></marker>
+                <marker id="seq-unplaced" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10" className="seq-open unplaced" /></marker>
               </defs>
               <g transform={`translate(0 ${-layout.head})`}>
               {layout.groups.map((g) => (
@@ -325,7 +327,7 @@ function Arrow({ item, y, x1, x2, past, name, onGo, onFold }: {
   item: Message; y: number; x1: number; x2: number; past: boolean;
   name: (id: string) => string; onGo: () => void; onFold?: () => void;
 }): ReactElement {
-  const marker = item.style === "command" ? "url(#seq-head)" : "url(#seq-open)";
+  const marker = item.unplaced ? "url(#seq-unplaced)" : item.style === "command" ? "url(#seq-head)" : "url(#seq-open)";
   // A receiver chosen by the payload (ADR 0031): a decision's diamond before the label, which names the values.
   const label = `${item.choice ? "◇ " : ""}${messageText(item)}`;
   const who = [...new Set(item.instances)];
@@ -339,8 +341,8 @@ function Arrow({ item, y, x1, x2, past, name, onGo, onFold }: {
       <g role="button" onClick={onGo}>
         <title>{tip}</title>
         {self
-          ? <path d={`M${x1},${y + 10} h40 v16 h-38`} className={`seq-arrow ${item.style}`} markerEnd={marker} />
-          : <line x1={x1} y1={y + 14} x2={x2 - (x2 > x1 ? 2 : -2)} y2={y + 14} className={`seq-arrow ${item.style}`} markerEnd={marker} />}
+          ? <path d={`M${x1},${y + 10} h40 v16 h-38`} className={`seq-arrow ${item.style}${item.unplaced ? " unplaced" : ""}`} markerEnd={marker} />
+          : <line x1={x1} y1={y + 14} x2={x2 - (x2 > x1 ? 2 : -2)} y2={y + 14} className={`seq-arrow ${item.style}${item.unplaced ? " unplaced" : ""}`} markerEnd={marker} />}
         <text x={lx} y={y + 8} textAnchor={self ? "start" : "middle"} className={`seq-label${item.choice ? " choice" : ""}`}>{label}</text>
       </g>
       {onFold && (

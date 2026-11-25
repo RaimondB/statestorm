@@ -3,7 +3,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { c4Of, c4ToMermaid, subsystemsInFocus, type C4Diagram, type C4Focus, type C4Node, type Model } from "@statestorm/kernel";
 import { C4, layoutC4, type C4Layout } from "../c4.ts";
 import { endsOf, type PlacedEdge } from "../context-map.ts";
-import { measure, NoSystems } from "./ContextMap.tsx";
+import { EdgeKeys, measure, NoSystems } from "./ContextMap.tsx";
 
 /** What the reader chose (ADR 0036 §4): the diagram, and the systems and contexts in focus. Kept in the link. */
 export interface C4State { diagram: C4Diagram; systems: string[]; contexts: string[] }
@@ -145,6 +145,7 @@ export function C4View({ model, state, onState, select }: { model: Model; state:
           <span><span className="map-key c4-in" /> in focus</span>
           <span><span className="map-key system" /> ours, around it</span>
           <span><span className="map-key external" /> outside</span>
+          <EdgeKeys />
           <span className="hint" title="Where a policy runs says who depends on whom (ADR 0035)"><b className="map-end-key">U</b> upstream, <b className="map-end-key">D</b> downstream</span>
           <span className="hint">◎ takes a box into the focus or out</span>
         </span>
@@ -156,9 +157,11 @@ export function C4View({ model, state, onState, select }: { model: Model; state:
           <svg width={layout.width * fitted} height={layout.height * fitted} viewBox={`0 0 ${layout.width} ${layout.height}`}
             role="img" aria-label={`${state.diagram === "context" ? "System context" : "Container"} diagram of ${[...focus.systems, ...focus.contexts].join(", ")}`}>
             <defs>
-              <marker id="c4-head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
-                <path d="M0,0 L10,5 L0,10 z" className="map-head" />
-              </marker>
+              {(["event", "command", "unplaced"] as const).map((k) => (
+                <marker key={k} id={`c4-head-${k}`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+                  <path d="M0,0 L10,5 L0,10 z" className={`map-head ${k}`} />
+                </marker>
+              ))}
             </defs>
             {layout.boundaries.map((b) => (
               <g key={b.name} className={`c4-boundary${b.external ? " external" : ""}`} transform={`translate(${b.x},${b.y})`}>
@@ -168,14 +171,14 @@ export function C4View({ model, state, onState, select }: { model: Model; state:
               </g>
             ))}
             {layout.edges.map((e, i) => (
-              <g key={i} className={`map-edge${e.mutual ? " mutual" : ""}${picked && picked.from === e.from && picked.to === e.to ? " picked" : ""}`} role="button"
+              <g key={i} className={`map-edge ${e.kind}${e.mutual ? " mutual" : ""}${picked && picked.from === e.from && picked.to === e.to ? " picked" : ""}`} role="button"
                 onClick={(ev) => {
                   ev.stopPropagation(); setPicked(e);
                   select({ kind: "flow", from: nameOf(e.from), to: nameOf(e.to), events: e.events, commands: e.commands, patterns: e.patterns, policies: e.policies,
                     downstream: e.downstream.map(nameOf), ...(e.mutual ? { mutual: true } : {}) });
                 }}>
                 <title>{`${nameOf(e.from)} → ${nameOf(e.to)}${e.patterns.length ? ` (${e.patterns.join(", ")})` : ""}${e.downstream.length ? `\ndownstream: ${e.downstream.map(nameOf).join(" and ")}${e.mutual ? " — each depends on the other" : ""}` : ""}\nevents: ${e.events.join(", ") || "—"}\ncommands: ${e.commands.join(", ") || "—"}`}</title>
-                <path d={`M${e.points.map((p) => `${p.x},${p.y}`).join(" L")}`} className="map-line" markerEnd="url(#c4-head)" />
+                <path d={`M${e.points.map((p) => `${p.x},${p.y}`).join(" L")}`} className="map-line" markerEnd={`url(#c4-head-${e.kind})`} />
                 {e.label && <text x={e.label.x + 4} y={e.label.y + 12} className="map-label">{e.label.text}</text>}
                 {endsOf(e).map((end, j) => (
                   <g key={j} className={`map-end ${end.text === "U" ? "up" : "down"}`} transform={`translate(${end.x},${end.y})`}>
