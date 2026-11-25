@@ -122,7 +122,7 @@ export function ContextMap({ model, select }: { model: Model; select: (s: Select
               </g>
             ))}
             {layout.nodes.map((n) => (
-              <g key={n.id} transform={`translate(${n.x},${n.y})`} className={`map-node ${n.kind}`} role="button"
+              <g key={n.id} transform={`translate(${n.x},${n.y})`} className={`map-node ${n.kind}${n.unmodelled ? " unmodelled" : ""}`} role="button"
                 onClick={(ev) => {
                   ev.stopPropagation();
                   setPicked(undefined);

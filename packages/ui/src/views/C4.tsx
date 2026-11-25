@@ -188,7 +188,7 @@ export function C4View({ model, state, onState, select }: { model: Model; state:
               const next = toggled(model, focus, n);
               const last = next.systems.length + next.contexts.length === 0;
               return (
-                <g key={n.id} transform={`translate(${n.x},${n.y})`} className={`map-node c4-node ${n.kind}${n.external ? " external" : ""}${n.focus ? " in" : ""}`} role="button"
+                <g key={n.id} transform={`translate(${n.x},${n.y})`} className={`map-node c4-node ${n.kind}${n.external ? " external" : ""}${n.focus ? " in" : ""}${n.unmodelled ? " unmodelled" : ""}`} role="button"
                   onClick={(ev) => { ev.stopPropagation(); setPicked(undefined); select(pick(n)); }}>
                   <title>{`${n.name}${n.note ? ` — ${n.note}` : ""} — what it is, in the inspector`}</title>
                   <rect width={n.width} height={n.height} rx={n.kind === "context" ? 18 : 6} />

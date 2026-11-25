@@ -622,6 +622,9 @@ ol.log .chain { grid-column: 4; font-size: 0.85rem; color: var(--muted); }
 .c4-toggle:hover circle { stroke: var(--accent); opacity: 1; }
 .c4-toggle:hover text { fill: var(--accent); }
 .c4-foot { padding: 4px 12px 8px; }
+/* ADR 0037: a part declared, none of it modelled yet — dotted, its name still readable */
+.map-node.unmodelled rect { stroke-dasharray: 2 3; }
+.map-node.unmodelled .map-sub { font-style: italic; }
 
 .map-node:hover rect { stroke: var(--accent); }
 .seq-frame-box { fill: none; stroke: var(--muted); stroke-width: 1.2; }

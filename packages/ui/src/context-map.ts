@@ -26,6 +26,7 @@ export function linesOf(n: MapNode): string[] {
     ...(n.spans ? [`spans ${n.spans.join(", ")}`] : []),
     ...(n.holds?.length ? [n.holds.join(", ")] : []),
     ...(n.library?.length ? [`library: ${n.library.join(", ")}`] : []),
+    ...(n.unmodelled ? ["not modelled yet"] : []),
   ];
 }
 

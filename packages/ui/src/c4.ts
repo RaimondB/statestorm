@@ -23,7 +23,7 @@ export function c4LinesOf(n: C4Node): string[] {
     : n.kind === "context" ? "[Bounded context]" : n.external ? "[External container]" : "[Container]";
   const owner = n.kind === "subsystem" && n.context && n.context !== n.name ? [`${n.context}${n.team ? ` · team ${n.team}` : ""}`]
     : n.team ? [`team ${n.team}`] : [];
-  return [kind, ...owner];
+  return [kind, ...owner, ...(n.unmodelled ? ["not modelled yet"] : [])];
 }
 
 /** A note wrapped to a box's width, cut after a few lines — the whole of it is in the tooltip and the inspector. */
