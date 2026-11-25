@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { loadModel } from "../src/model.ts";
 import { createWorld, send } from "../src/engine.ts";
 import { PERSON } from "../src/systems.ts";
+import { contextMap } from "../src/systems.ts";
 import { lifelineNamed, lifelinesOf, listText, messageText, openAt, sequenceOf, sequenceToMermaid, type Sequence, type SequenceItem, type SequenceView } from "../src/sequence.ts";
 import { parseScenario, runScenario } from "../../scenarios/src/index.ts";
 import { fileURLToPath } from "node:url";
@@ -254,7 +255,7 @@ test("an arrow says the fields the model declares, and the instances it reached 
 // ADR 0038: a policy drawn where it runs. Billing runs the reservation between the shop and the
 // warehouse; the shop notes the order itself; the warehouse hears the order for its picking list; the
 // receipt is placed nowhere.
-const placed = loadModel(`
+const PLACED = `
 context: T
 aggregates:
   Order:
@@ -311,7 +312,8 @@ systems:
   Billing: { packages: [Invoicing] }
   Warehouse: { packages: [Stock] }
   Printer: { packages: [Printing] }
-`);
+`;
+const placed = loadModel(PLACED);
 const placedAt = (depth: "system" | "aggregate") => {
   const w = createWorld(placed, "2026-01-01T09:00:00Z", { kind: "fifo" });
   send(w, "Order#O1.Place", { lines: ["A", "B"] });
@@ -358,4 +360,24 @@ test("the lab's placed policies in its sequence (ADR 0038): run where raised, a 
   assert.ok(lines.some((l) => /^->> subsystem:Lab\/Bench → subsystem:Lab\/Logistics: \w+\.Describe$/.test(l)));
   // Each part hears the sample's scans for its own handlings (in: target): the event crosses, as before.
   assert.ok(lines.some((l) => /^--\) subsystem:Lab\/Logistics → subsystem:Lab\/(Ordering|Bench): Received → /.test(l)));
+});
+
+test("what crosses says how it is drawn (ADR 0038): heard, sent, or carried by a policy placed nowhere — red", () => {
+  const edges = contextMap(placed, "system").edges;
+  const edge = (from: string, to: string) => edges.find((e) => e.from === from && e.to === to)!;
+  assert.deepEqual([edge("Shop", "Billing").heard, edge("Shop", "Billing").sends], [["Placed"], []], "heard by the part that runs it");
+  assert.deepEqual([edge("Billing", "Warehouse").heard, edge("Billing", "Warehouse").sends], [[], ["Item.Reserve"]], "sent from there");
+  const both = edge("Shop", "Warehouse");
+  assert.deepEqual([both.heard, both.sends], [["Placed"], ["Ledger.Note"]], "one edge, drawn as two: the warehouse hears, the shop sends");
+  assert.deepEqual(edge("Shop", "Printer").unplaced, { events: ["Placed"], commands: ["Receipt.Print"], policies: ["receipt"] });
+  assert.deepEqual(edge("Shop", "Printer").heard, [], "red, not orange");
+  const receipt = messages(placedAt("system")).find((m) => m.policy === "receipt")!;
+  assert.equal(receipt.unplaced, true);
+  assert.equal(messages(placedAt("system")).find((m) => m.policy === "reserve")!.unplaced, undefined);
+  // A model that places none is not placing yet: nothing is red (ADR 0035 §6).
+  const none = loadModel(PLACED.replace(/\n    in: [a-zA-Z]+/g, ""));
+  assert.ok(contextMap(none, "system").edges.every((e) => e.unplaced.policies.length === 0));
+  const w = createWorld(none, "2026-01-01T09:00:00Z", { kind: "fifo" });
+  send(w, "Order#O1.Place", { lines: ["A"] });
+  assert.ok(messages(sequenceOf(none, w.log, { open: openAt(lifelinesOf(none), "system") })).every((m) => !m.unplaced));
 });

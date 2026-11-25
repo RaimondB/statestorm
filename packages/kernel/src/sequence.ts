@@ -7,7 +7,7 @@
  */
 import type { LogEntry } from "./log.ts";
 import type { Json, Model, SubsystemDef, TransitionDef } from "./types.ts";
-import { choiceOfEvent, eventsRaisedBy, mid, narrowedBy, ownersOfType, PERSON, placeOf, receiversOfEvent, senderOfCommand, SystemsError, transitionsOf } from "./systems.ts";
+import { choiceOfEvent, eventsRaisedBy, mid, placesPolicies, narrowedBy, ownersOfType, PERSON, placeOf, receiversOfEvent, senderOfCommand, SystemsError, transitionsOf } from "./systems.ts";
 
 // ------------------------------------------------------------------ the lifelines (§7)
 
@@ -163,6 +163,8 @@ export type SequenceItem =
     choice?: Choice;
     /** ADR 0032: the label is followed by the ids of the instances it reached — a fold's, all of them. */
     ids?: true;
+    /** ADR 0038: carried by a policy placed nowhere, in a model that places others — it needs a place. */
+    unplaced?: true;
     /** Folded: the same arrow, this many times; `fold` opens it. */
     times?: number; fold?: string;
   }
@@ -235,7 +237,7 @@ interface Fact {
   heard?: string;
   sent?: string;
   ignored: boolean;
-  what: { event?: string; command?: string; policy?: string; choice?: Choice; ids?: true };
+  what: { event?: string; command?: string; policy?: string; choice?: Choice; ids?: true; unplaced?: true };
 }
 
 /** Values in a label: the first three, then how many more (ADR 0032) — a roll-up of many stays short. */
@@ -271,6 +273,7 @@ export function messageText(item: Extract<SequenceItem, { kind: "message" }>): s
 }
 
 function factsOf(model: Model, log: LogEntry[]): Fact[] {
+  const placing = placesPolicies(model);
   const bySeq = new Map(log.map((e) => [e.seq, e]));
   const ignored = new Set(log.flatMap((e) => (e.kind === "ignored" ? [e.cause] : [])));
   const parts = model.systems!.subsystems.filter((s) => s.external);
@@ -317,7 +320,8 @@ function factsOf(model: Model, log: LogEntry[]): Fact[] {
         const ev = shown(model, hop.event, hop.payload as Record<string, Json>, []);
         const heard = `${hop.event}${ev.text ? ` · ${ev.text}` : ""}`;
         out.push({ ...base, kind: "hop", fromType: typeOfInstance(hop.instance), label: `${heard} → ${named}`, style: "event", ...(loop ? { loop } : {}),
-          ...(firing !== undefined ? { firing } : {}), heard, sent: named, what: { event: hop.event, command: `${type}.${e.name}`, ...(policy ? { policy } : {}), ...(said.ids ? { ids: true as const } : {}) } });
+          ...(firing !== undefined ? { firing } : {}), heard, sent: named, what: {
+            ...(policy && placing && model.policies[policy]?.runsIn === undefined ? { unplaced: true as const } : {}), event: hop.event, command: `${type}.${e.name}`, ...(policy ? { policy } : {}), ...(said.ids ? { ids: true as const } : {}) } });
       } else out.push({ ...base, kind: "inside", fromType: type, label: named, style: "command" });
     } else if (e.kind === "event") {
       // Told only to the parts whose values the payload matches (ADR 0031); where the payload chooses,
