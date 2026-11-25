@@ -247,6 +247,12 @@ through time; what they change stays in their browser. The bundled examples are 
   each edge's ends **U** (upstream) and **D** (downstream), lays upstream above, and draws two parts that
   depend on each other as a warning. The check warns of such a cycle, of a declared relation the policies
   turn round, and, once one policy is placed, of those that are not.
+- **Drawn where it runs, in every view** (ADR 0038): the sequence draws a placed policy as the event to
+  the part that runs it and the command from there — run where its event was raised, the command alone;
+  run by a third part, both, and opened down to its aggregates that part shows a `policies` lifeline.
+  The three views draw alike: events orange and dashed, commands blue and solid, and, once a model places
+  any, what a policy placed nowhere carries red. Place for least coupling: on a fan-in (many senders, one
+  command) `in: source`; on a fan-out (one sender, many consumers) `in: target`.
 - **A part declared before it is modelled** (ADR 0037): `packages: []` on a sub-system (or a system of
   one part) names a part whose logic the model does not reach yet. Leaving `packages` out is still an
   error. The context map and the C4 view draw it dotted, *not modelled yet*.
