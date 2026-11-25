@@ -42,6 +42,9 @@ meeting. A meeting is a thing of its own, written once and kept.
    agenda's `scope:` tags is a **warning** — shown in a meeting about a phase it is not of.
 4. **`statestorm share --agenda=<name>`** builds the shared file with only the agenda's scenarios, opening
    on its first step: what stakeholders open before the meeting. `--without=` still applies.
+   **Amended 2026-11-25: `--opens=<name>`** shares the domain whole, every scenario, every agenda and
+   every view, and opens the file on the agenda's first step. It is for a meeting whose readers also go
+   beyond the agenda. The agenda must read, as for `--agenda`. The two do not combine.
 
 ## Consequences
 
