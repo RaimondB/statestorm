@@ -32,11 +32,11 @@ test("the container diagram lays a system's containers inside its boundary, and 
   assert.ok(y("Logistics") < y("Bench") && y("Logistics") < y("Ordering"));
 });
 
-test("a box's note wraps to its width and stops after three lines; an edge's label names the first two of what crosses it", () => {
+test("a box's note wraps to its width and stops after three lines; an edge's label names the first of what crosses it, and how many more", () => {
   assert.deepEqual(wrap("the request and its route", 1000, estimate), ["the request and its route"]);
   const long = wrap("one two three four five six seven eight nine ten eleven twelve thirteen", 60, estimate);
   assert.equal(long.length, 3);
   assert.match(long[2]!, /…$/);
   const edge = c4Of(lab, "container", { systems: [], contexts: ["Testing"] }).edges.find((e) => e.from === "subsystem:Lab/Logistics")!;
-  assert.match(c4LabelOf(edge), /^SiteDescribed, Received \+\d+$/);
+  assert.match(c4LabelOf(edge), /^SiteDescribed \+\d+$/);
 });

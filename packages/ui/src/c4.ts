@@ -39,10 +39,11 @@ export function wrap(text: string | undefined, width: number, measure: Measure, 
   return out.length > max ? [...out.slice(0, max - 1), `${out[max - 1]}…`] : out;
 }
 
-/** An edge's label: its patterns, and the first of what crosses it — the full lists are in its tooltip. */
+/** An edge's label: its patterns, and the first of what crosses it with how many more — kept short, so ELK
+ *  places it in the gap between layers, clear of the U and D. The full lists are in its tooltip and the inspector. */
 export function c4LabelOf(e: MapEdge): string {
   const said = [...e.events, ...e.commands.filter((c) => !e.events.includes(c)).map((c) => `${c}()`)];
-  return [...e.patterns.map((p) => `«${p}»`), [said.slice(0, 2).join(", "), said.length > 2 ? `+${said.length - 2}` : ""].filter(Boolean).join(" ")]
+  return [...e.patterns.map((p) => `«${p}»`), [said[0] ?? "", said.length > 1 ? `+${said.length - 1}` : ""].filter(Boolean).join(" ")]
     .filter(Boolean).join(" ");
 }
 
