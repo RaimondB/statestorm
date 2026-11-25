@@ -6,7 +6,7 @@
 import type { ElkExtendedEdge, ElkNode } from "elkjs/lib/elk-api";
 import type { C4Boundary, C4Node, C4View, MapEdge } from "@statestorm/kernel";
 import { estimate, type Box, type Measure } from "./chart-layout.ts";
-import type { PlacedEdge } from "./context-map.ts";
+import { drawnEdges, type PlacedEdge } from "./context-map.ts";
 
 export const C4 = { pad: 12, line: 16, minW: 170, noteW: 230, noteLines: 3, boundaryTop: 30, /** Room either side of a name for the ◎ in its corner. */ toggle: 18,
   /** Neighbours side by side in a row, above the focus or below it; more wrap to the next row. */ perRow: 4,
@@ -80,6 +80,7 @@ export function rowBreaks(view: C4View, perRow = C4.perRow): ElkExtendedEdge[] {
 export async function layoutC4(view: C4View, measure: Measure = estimate): Promise<C4Layout> {
   const { default: ELK } = await import("elkjs/lib/elk.bundled.js");
   const elk = new ELK();
+  const drawn = drawnEdges(view.edges);
   const sized = view.nodes.map((n) => {
     const lines = c4LinesOf(n);
     const notes = wrap(n.note, C4.noteW, measure);
@@ -113,7 +114,7 @@ export async function layoutC4(view: C4View, measure: Measure = estimate): Promi
     // No labels for ELK: in a layered layout each label is a box of its own in the layer between, and a
     // focus with many neighbours grew several times wider for them. They are placed after (below).
     edges: [
-      ...view.edges.map((e, i): ElkExtendedEdge => ({ id: `e${i}`, sources: [upward(e) ? e.to : e.from], targets: [upward(e) ? e.from : e.to] })),
+      ...drawn.map((e, i): ElkExtendedEdge => ({ id: `e${i}`, sources: [upward(e) ? e.to : e.from], targets: [upward(e) ? e.from : e.to] })),
       ...rowBreaks(view),
     ],
   };
@@ -136,7 +137,7 @@ export async function layoutC4(view: C4View, measure: Measure = estimate): Promi
   const focused = new Set(view.nodes.filter((n) => n.focus).map((n) => n.id));
   const taken: Box[] = nodes.map((n) => ({ x: n.x, y: n.y, width: n.width, height: n.height }));
   const overlaps = (a: Box) => taken.some((b) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height);
-  const edges: PlacedEdge[] = view.edges.map((e, i) => {
+  const edges: PlacedEdge[] = drawn.map((e, i) => {
     const laid = laidEdges.find((x) => x.id === `e${i}`);
     const s = laid?.sections?.[0];
     const laidOut = s ? [s.startPoint, ...(s.bendPoints ?? []), s.endPoint] : [];

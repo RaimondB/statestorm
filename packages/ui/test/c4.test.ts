@@ -45,7 +45,8 @@ test("a box's note wraps to its width and stops after three lines; an edge's lab
 test("many neighbours wrap into rows of four, and each label sits on its own edge near its neighbour (ADR 0036)", async () => {
   // A focus nine systems send to, and two it tells: one row of nine was as wide as all of them.
   const senders = Array.from({ length: 9 }, (_, i) => `system:Sender ${i + 1}`), told = ["system:Told 1", "system:Told 2"];
-  const edge = (from: string, to: string, what: string) => ({ from, to, events: [what, `${what}Again`], commands: [], patterns: [], policies: [], downstream: [to] });
+  const edge = (from: string, to: string, what: string) => ({ from, to, events: [what, `${what}Again`], commands: [], patterns: [], policies: [], downstream: [to],
+    heard: [what, `${what}Again`], sends: [], unplaced: { events: [], commands: [], policies: [] } });
   const view: C4View = {
     diagram: "context", focus: { systems: ["Hub"], contexts: [] },
     nodes: [{ id: "system:Hub", name: "Hub", kind: "system", focus: true },

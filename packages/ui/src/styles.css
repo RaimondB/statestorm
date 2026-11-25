@@ -554,6 +554,17 @@ ol.log .chain { grid-column: 4; font-size: 0.85rem; color: var(--muted); }
 .map-head { fill: var(--muted); }
 .map-edge { cursor: pointer; }
 .map-edge:hover .map-line, .map-edge.picked .map-line { stroke: var(--accent); stroke-width: 2.4; }
+/* ADR 0038: the three views draw alike — events orange and dashed, commands blue and solid, unplaced red */
+.map-edge.event .map-line { stroke: var(--event); stroke-dasharray: 6 4; }
+.map-edge.command .map-line { stroke: var(--command); }
+.map-edge.unplaced .map-line { stroke: var(--error); stroke-dasharray: 6 4; }
+.map-head.event { fill: var(--event); }
+.map-head.command { fill: var(--command); }
+.map-head.unplaced { fill: var(--error); }
+.map-key-line { stroke-width: 2; }
+.map-key-line.event { stroke: var(--event); stroke-dasharray: 5 3; }
+.map-key-line.command { stroke: var(--command); }
+.map-key-line.unplaced { stroke: var(--error); stroke-dasharray: 5 3; }
 .map-edge.mutual .map-line { stroke: var(--warn); stroke-dasharray: 5 3; }
 .map-key.mutual { border: none; border-top: 2px dashed var(--warn); height: 0; }
 .map-end circle { fill: var(--surface); stroke: var(--muted); stroke-width: 1.2; }
@@ -574,6 +585,9 @@ ol.log .chain { grid-column: 4; font-size: 0.85rem; color: var(--muted); }
 .seq-arrow { stroke-width: 1.6; fill: none; }
 .seq-arrow.command { stroke: var(--command); }
 .seq-arrow.event { stroke: var(--event); stroke-dasharray: 6 4; }
+/* ADR 0038: a policy placed nowhere, in a model that places others — red, it needs a place */
+.seq-arrow.unplaced { stroke: var(--error); }
+.seq-open.unplaced { stroke: var(--error); }
 .seq-head { fill: var(--command); }
 .seq-open { fill: none; stroke: var(--event); stroke-width: 1.5; }
 .seq-label { font: 12px var(--sans); fill: var(--fg); paint-order: stroke; stroke: var(--surface); stroke-width: 4px; }

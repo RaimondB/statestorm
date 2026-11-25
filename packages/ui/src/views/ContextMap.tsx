@@ -93,6 +93,7 @@ export function ContextMap({ model, select }: { model: Model; select: (s: Select
         <span className="ov-legend">
           <span><span className="map-key system" /> ours</span>
           <span><span className="map-key external" /> outside</span>
+          <EdgeKeys />
           <span className="hint" title="Where a policy runs says who depends on whom (ADR 0035): the part that runs it is downstream of the parts it hears and commands">
             <b className="map-end-key">U</b> upstream above, <b className="map-end-key">D</b> downstream below</span>
           {map.map?.edges.some((e) => e.mutual) && <span><span className="map-key mutual" /> each depends on the other</span>}
@@ -104,15 +105,17 @@ export function ContextMap({ model, select }: { model: Model; select: (s: Select
           <svg width={layout.width * fitted} height={layout.height * fitted} viewBox={`0 0 ${layout.width} ${layout.height}`}
             role="img" aria-label={`Context map of ${model.context}, at ${level} level`}>
             <defs>
-              <marker id="map-head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
-                <path d="M0,0 L10,5 L0,10 z" className="map-head" />
-              </marker>
+              {(["event", "command", "unplaced"] as const).map((k) => (
+                <marker key={k} id={`map-head-${k}`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+                  <path d="M0,0 L10,5 L0,10 z" className={`map-head ${k}`} />
+                </marker>
+              ))}
             </defs>
             {layout.edges.map((e, i) => (
-              <g key={i} className={`map-edge${e.mutual ? " mutual" : ""}${picked && picked.from === e.from && picked.to === e.to ? " picked" : ""}`} role="button"
+              <g key={i} className={`map-edge ${e.kind}${e.mutual ? " mutual" : ""}${picked && picked.from === e.from && picked.to === e.to ? " picked" : ""}`} role="button"
                 onClick={(ev) => { ev.stopPropagation(); setPicked(e); select({ kind: "flow", from: e.from, to: e.to, events: e.events, commands: e.commands, patterns: e.patterns, policies: e.policies, downstream: e.downstream, ...(e.mutual ? { mutual: true } : {}) }); }}>
                 <title>{`${e.from} → ${e.to}${e.patterns.length ? ` (${e.patterns.join(", ")})` : ""}${e.downstream.length ? `\ndownstream: ${e.downstream.join(" and ")}${e.mutual ? " — each depends on the other" : ""}` : ""}\nevents: ${e.events.join(", ") || "—"}\ncommands: ${e.commands.join(", ") || "—"}`}</title>
-                <path d={`M${e.points.map((p) => `${p.x},${p.y}`).join(" L")}`} className="map-line" markerEnd="url(#map-head)" />
+                <path d={`M${e.points.map((p) => `${p.x},${p.y}`).join(" L")}`} className="map-line" markerEnd={`url(#map-head-${e.kind})`} />
                 {e.label && <text x={e.label.x + 4} y={e.label.y + 12} className="map-label">{e.label.text}</text>}
                 {endsOf(e).map((end, j) => (
                   <g key={j} className={`map-end ${end.text === "U" ? "up" : "down"}`} transform={`translate(${end.x},${end.y})`}>
@@ -142,6 +145,17 @@ export function ContextMap({ model, select }: { model: Model; select: (s: Select
         )}
       </div>
     </div>
+  );
+}
+
+/** ADR 0038: the three views draw alike — an event orange and dashed, a command blue and solid, a policy placed nowhere red. */
+export function EdgeKeys() {
+  return (
+    <>
+      <span title="Events heard across it — by the part that runs the policy"><svg width="30" height="10"><line x1="2" y1="5" x2="28" y2="5" className="map-key-line event" /></svg> event</span>
+      <span title="Commands sent across it — from the part that runs the policy"><svg width="30" height="10"><line x1="2" y1="5" x2="28" y2="5" className="map-key-line command" /></svg> command</span>
+      <span title="Carried by a policy placed nowhere: say where it runs (in:, ADR 0035)"><svg width="30" height="10"><line x1="2" y1="5" x2="28" y2="5" className="map-key-line unplaced" /></svg> not placed</span>
+    </>
   );
 }
 
