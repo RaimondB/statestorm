@@ -91,6 +91,13 @@ Status is one of `open`, `claimed — …`, `blocked — <on what>`.
 - **done when:** a placed policy is drawn as the event to the part that runs it and the command from
   there; a lab scenario where a third part runs it shows both arrows; unplaced policies are drawn as today.
 
+### B-20 A part declared before it is modelled
+- **status:** claimed — Claude (for raimondb), b20-unmodelled-subsystem, 2026-11-25
+- **why:** a system in parts where only one part runs anything modelled cannot be declared whole: a
+  sub-system of our own must list packages.
+- **done when:** ADR 0037; `packages: []` accepted, a missing list still refused; the map and the C4 view
+  mark it; a test.
+
 ## Later — on the roadmap, not yet started
 
 - **B-8 The board view:** EventStorming stickies laid out as a board, clickable to run before it is
