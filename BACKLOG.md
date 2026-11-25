@@ -84,12 +84,14 @@ Status is one of `open`, `claimed — …`, `blocked — <on what>`.
 
 ### B-22 A C4 view with many neighbours, readable and not too wide
 - **status:** open
-- **why:** a focus with nine neighbours is laid out about 4,500 px wide: each neighbour that only sends
-  to the focus sits in one row, and ELK makes each edge label a box in the layer between. B-21 wrapped
-  such rows at four and placed the labels itself, near the neighbour's end. That was narrower, but
-  harder to read: labels crowded the U and D marks and gave only the first message. It was reverted.
-- **next:** keep ELK's labels in the gaps between layers, with full lists. Find width another way,
-  such as wrapping rows without moving the labels, or a label per side of the focus.
+- **why:** ELK places each edge label in the gap between layers, which keeps it clear of the U and D,
+  and the label names the first message and how many more. That is about 2,500 px wide for a focus
+  with nine neighbours in a real model, and 3,750 px for one with fourteen. B-21 placed the labels itself, near
+  the neighbour's end, and wrapped the rows at four: narrower, but the labels covered the U and D. It
+  was reverted. With ELK's labels, rows of four do not help, since the labels set the width (measured:
+  the same or a little wider).
+- **next:** labels off the layer gaps without covering the ends, e.g. ELK's label placement at the head
+  or tail with the U and D moved inward, or a label per side of the focus.
 
 ## Later — on the roadmap, not yet started
 
