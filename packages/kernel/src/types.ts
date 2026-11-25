@@ -84,6 +84,8 @@ export interface SubsystemDef {
   /** ADR 0030: what a part of our own works out itself, which the model does not run — a scenario sends the result in its name. */
   computes?: SystemSendDef[];
   note?: string;
+  /** ADR 0037: one of ours, declared with \`packages: []\` — none of its logic modelled yet. */
+  unmodelled?: boolean;
   why?: string[];
 }
 

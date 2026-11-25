@@ -220,7 +220,8 @@ export function systemsOf(rawSystems: unknown, rawContexts: unknown, rawRelation
       if (split && names.has(sub) && sub !== name) throw new SystemsError(`${sw}: the name is used twice`);
       if (sub !== name) names.add(sub);
       const packages = list(sb.packages, `${sw}.packages`);
-      if (packages.length === 0 && !external) throw new SystemsError(`${sw}: a sub-system lists its \`packages\``);
+      // ADR 0037: \`packages: []\`, said on purpose, declares a part before any of its logic is modelled.
+      if (sb.packages === undefined && !external) throw new SystemsError(`${sw}: a sub-system lists its \`packages\` — \`packages: []\` for one declared before it is modelled (ADR 0037)`);
       for (const p of packages) {
         if (!packageNames.has(p)) throw new SystemsError(`${sw}.packages: there is no package called \`${p}\` (ADR 0013)`);
         if (packageHome.has(p)) throw new SystemsError(`${sw}.packages: \`${p}\` is already in sub-system ${packageHome.get(p)}`);
@@ -248,6 +249,7 @@ export function systemsOf(rawSystems: unknown, rawContexts: unknown, rawRelation
         ...(played.length ? { plays: played.map((r) => r.name) } : {}),
         ...(sb.note !== undefined ? { note: String(sb.note) } : {}),
         ...(why(sb.why) ? { why: why(sb.why)! } : {}),
+        ...(!external && packages.length === 0 ? { unmodelled: true } : {}),
       });
     }
     systems.push({
@@ -524,6 +526,8 @@ export interface MapNode {
   holds?: string[];
   /** The packages of abstract types a system owns — the shared definitions (ADR 0020 §5). */
   library?: string[];
+  /** ADR 0037: declared, and nothing of it modelled yet. */
+  unmodelled?: boolean;
 }
 export interface MapEdge {
   from: string; to: string; events: string[]; commands: string[]; patterns: string[];
@@ -562,7 +566,14 @@ export function scopesOf(model: Model): string[] {
 
 function systemNode(model: Model, s: SystemDef): MapNode {
   const library = s.external ? [] : libraryOf(model, s.name);
-  return { id: s.name, kind: s.external ? "external" : "system", ...(s.note ? { note: s.note } : {}), ...(library.length ? { library } : {}) };
+  return { id: s.name, kind: s.external ? "external" : "system", ...(s.note ? { note: s.note } : {}), ...(library.length ? { library } : {}),
+    ...(unmodelledSystem(model, s.name) ? { unmodelled: true } : {}) };
+}
+
+/** ADR 0037: a system of ours whose every part is declared and none modelled. */
+function unmodelledSystem(model: Model, system: string): boolean {
+  const parts = model.systems!.subsystems.filter((s) => s.system === system);
+  return parts.length > 0 && parts.every((s) => s.unmodelled);
 }
 
 function nodesAt(model: Model, level: Level, scope?: string): MapNode[] {
@@ -589,7 +600,7 @@ function nodesAt(model: Model, level: Level, scope?: string): MapNode[] {
   }
   if (!scope || !scopesOf(model).includes(scope)) throw new SystemsError(`sub-system level needs a system as its scope — one of the model's own, or an external system in parts (${scopesOf(model).join(", ")})`);
   return [
-    ...sys.subsystems.filter((s) => s.system === scope).map((s): MapNode => ({ id: s.name, kind: "subsystem", system: scope, ...(s.note ? { note: s.note } : {}) })),
+    ...sys.subsystems.filter((s) => s.system === scope).map((s): MapNode => ({ id: s.name, kind: "subsystem", system: scope, ...(s.note ? { note: s.note } : {}), ...(s.unmodelled ? { unmodelled: true } : {}) })),
     ...sys.systems.filter((s) => s.name !== scope).map((s) => systemNode(model, s)),
   ];
 }
@@ -812,7 +823,7 @@ export function contextMapToMermaid(m: ContextMap): string {
   for (const n of m.nodes) {
     const label = n.kind === "external" ? `${n.id}<br/>«external»`
       : n.kind === "domain" ? `${n.id}<br/>«domain»${n.holds?.length ? `<br/>${n.holds.join(", ")}` : ""}`
-      : n.spans ? `${n.id}<br/>(${n.spans.join(", ")})` : n.library ? `${n.id}<br/>library: ${n.library.join(", ")}` : n.id;
+      : n.spans ? `${n.id}<br/>(${n.spans.join(", ")})` : n.library ? `${n.id}<br/>library: ${n.library.join(", ")}` : n.unmodelled ? `${n.id}<br/>(not modelled yet)` : n.id;
     lines.push(n.kind === "external" ? `  ${mid(n.id)}[/"${label}"/]` : n.kind === "domain" ? `  ${mid(n.id)}(["${label}"])` : `  ${mid(n.id)}["${label}"]`);
   }
   for (const e of m.edges) lines.push(`  ${mid(e.from)} -->|"${edgeText(e)}"| ${mid(e.to)}`);
@@ -847,6 +858,8 @@ export interface C4Node {
   context?: string;
   team?: string;
   note?: string;
+  /** ADR 0037: declared, and nothing of it modelled yet. */
+  unmodelled?: boolean;
 }
 export interface C4Boundary { name: string; external: boolean; note?: string }
 export interface C4View { diagram: C4Diagram; focus: C4Focus; nodes: C4Node[]; boundaries: C4Boundary[]; edges: MapEdge[] }
@@ -897,7 +910,7 @@ export function c4Of(model: Model, diagram: C4Diagram, focus: C4Focus): C4View {
     const focus = focused.has(id);
     if (id.startsWith("system:")) {
       const s = sys.systems.find((x) => x.name === name);
-      return { id, name, kind: s?.external ? "external" : "system", focus, ...(s?.note ? { note: s.note } : {}) };
+      return { id, name, kind: s?.external ? "external" : "system", focus, ...(s?.note ? { note: s.note } : {}), ...(s && unmodelledSystem(model, s.name) ? { unmodelled: true } : {}) };
     }
     const system = id.slice(id.indexOf(":") + 1, id.lastIndexOf("/"));
     if (id.startsWith("context:")) {
@@ -907,7 +920,7 @@ export function c4Of(model: Model, diagram: C4Diagram, focus: C4Focus): C4View {
     const sub = sys.subsystems.find((x) => x.system === system && x.name === name)!;
     const team = sys.contexts.find((x) => x.name === sub.context)?.team;
     return { id, name, kind: "subsystem", focus, boundary: system, ...(sub.external ? { external: true } : {}), context: sub.context,
-      ...(team ? { team } : {}), ...(sub.note ? { note: sub.note } : {}) };
+      ...(team ? { team } : {}), ...(sub.note ? { note: sub.note } : {}), ...(sub.unmodelled ? { unmodelled: true } : {}) };
   });
   const boundaries = sys.systems.filter((s) => nodes.some((n) => n.boundary === s.name))
     .map((s): C4Boundary => ({ name: s.name, external: s.external, ...(s.note ? { note: s.note } : {}) }));
@@ -917,16 +930,17 @@ export function c4Of(model: Model, diagram: C4Diagram, focus: C4Focus): C4View {
 /** Mermaid's C4 diagrams (ADR 0036 §5): `C4Context` or `C4Container`, a neighbour of our own greyed. */
 export function c4ToMermaid(v: C4View): string {
   const q = (s: string) => s.replace(/"/g, "'");
+  const described = (n: C4Node) => [n.note ?? "", n.unmodelled ? "(not modelled yet)" : ""].filter(Boolean).join(" ");
   const what = [...v.focus.systems, ...v.focus.contexts].join(", ");
   const lines = [v.diagram === "context" ? "C4Context" : "C4Container", `  title ${v.diagram === "context" ? "System context" : "Containers"} of ${what}`];
   const element = (n: C4Node, indent: string) => {
     const a = mid(n.id);
     if (n.kind === "subsystem") {
       const said = [n.context ? `context: ${n.context}` : "", n.team ? `team: ${n.team}` : ""].filter(Boolean).join(", ");
-      lines.push(`${indent}${n.external ? "Container_Ext" : "Container"}(${a}, "${q(n.name)}", "${q(said)}", "${q(n.note ?? "")}")`);
+      lines.push(`${indent}${n.external ? "Container_Ext" : "Container"}(${a}, "${q(n.name)}", "${q(said)}", "${q(described(n))}")`);
     } else if (n.kind === "context") {
       lines.push(`${indent}System(${a}, "${q(n.name)}", "${q(["«bounded context»", n.team ? `team: ${n.team}` : "", n.note ?? ""].filter(Boolean).join(" — "))}")`);
-    } else lines.push(`${indent}${n.kind === "external" ? "System_Ext" : "System"}(${a}, "${q(n.name)}", "${q(n.note ?? "")}")`);
+    } else lines.push(`${indent}${n.kind === "external" ? "System_Ext" : "System"}(${a}, "${q(n.name)}", "${q(described(n))}")`);
   };
   for (const n of v.nodes.filter((x) => !x.boundary)) element(n, "  ");
   for (const b of v.boundaries) {

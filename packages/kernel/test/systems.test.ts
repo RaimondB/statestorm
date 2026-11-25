@@ -241,3 +241,25 @@ test("a focus of several (ADR 0036): an external system in parts, a context acro
   assert.throws(() => c4Of(lab, "context", { systems: [], contexts: ["Bench"] }), /no bounded context called `Bench`/);
   assert.throws(() => c4Of(lab, "context", { systems: [], contexts: [] }), /name a system or a bounded context/);
 });
+
+test("a part declared before it is modelled (ADR 0037): `packages: []` on purpose, shown as such; a missing list still refused", () => {
+  const declared = loadModel(withSystems(`systems:
+  Lab:
+    subsystems:
+      Ordering:  { packages: [Requests, Steps, Sites, Transfers, Samples, Deviations, Cool boxes, Patient] }
+      Bench:     { packages: [Analysis] }
+      Results:   { packages: [], note: what the doctor reads }
+  Archive: { packages: [] }`));
+  const results = declared.systems!.subsystems.find((s) => s.name === "Results")!;
+  assert.deepEqual([results.unmodelled, results.packages], [true, []]);
+  assert.equal(declared.systems!.subsystems.find((s) => s.name === "Bench")!.unmodelled, undefined);
+  const inside = contextMap(declared, "subsystem", "Lab");
+  assert.equal(inside.nodes.find((n) => n.id === "Results")!.unmodelled, true);
+  assert.equal(inside.nodes.find((n) => n.id === "Archive")!.unmodelled, true, "a system of one part, none of it modelled");
+  assert.equal(contextMap(declared, "system").nodes.find((n) => n.id === "Lab")!.unmodelled, undefined, "a system with some of it modelled is not");
+  const c4 = c4Of(declared, "container", { systems: ["Lab"], contexts: [] });
+  assert.ok(c4.nodes.some((n) => n.name === "Results" && n.focus && n.unmodelled), "in focus, though nothing crosses to it");
+  assert.match(c4ToMermaid(c4), /Container\(subsystem_Lab_Results, "Results", "context: Lab", "what the doctor reads \(not modelled yet\)"\)/);
+  assert.throws(() => loadModel(withSystems("systems:\n  Lab: { subsystems: { Bench: { packages: [Analysis] }, Results: { note: forgotten } } }")),
+    /Results: a sub-system lists its `packages` — `packages: \[\]` for one declared before it is modelled/);
+});
