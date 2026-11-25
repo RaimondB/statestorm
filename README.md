@@ -247,6 +247,9 @@ through time; what they change stays in their browser. The bundled examples are 
   each edge's ends **U** (upstream) and **D** (downstream), lays upstream above, and draws two parts that
   depend on each other as a warning. The check warns of such a cycle, of a declared relation the policies
   turn round, and, once one policy is placed, of those that are not.
+- **A part declared before it is modelled** (ADR 0037): `packages: []` on a sub-system (or a system of
+  one part) names a part whose logic the model does not reach yet. Leaving `packages` out is still an
+  error. The context map and the C4 view draw it dotted, *not modelled yet*.
 - **A part in focus, as C4** (ADR 0036): the **C4** view puts the systems and bounded contexts you pick in
   the middle, with only the parts they exchange messages with, as a C4 *system context* or *container*
   diagram. Pick the focus above it, or press **◎** on a box to pull a neighbour in or take a part out; a
