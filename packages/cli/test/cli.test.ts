@@ -430,6 +430,23 @@ test("statestorm share --agenda shares only the agenda's scenarios, opening on i
   assert.match(wrong.stderr, /--agenda: no agendas\/nope\.yaml in lab — there are ward-review/);
 });
 
+test("statestorm share --opens shares everything, opening on the agenda (ADR 0025)", { skip: !standalone && "no standalone site (pnpm build)" }, () => {
+  const dir = labDomain();
+  const out = join(dir, "..", "whole.html");
+  const r = spawnSync(process.execPath, [cli, "share", dir, `--out=${out}`, "--opens=ward-review"], { encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr);
+  const json = JSON.parse(/<script type="application\/json" id="statestorm-domains">(.*?)<\/script>/s.exec(readFileSync(out, "utf8"))![1]!.replace(/\\u003c/g, "<"));
+  const shared = Object.keys(json.domains[0].files).filter((f) => /^scenarios\/[^/]+\.yaml$/.test(f));
+  const all = readdirSync(join(dir, "scenarios")).filter((f) => f.endsWith(".yaml"));
+  assert.equal(json.domains[0].opens, "ward-review");
+  assert.equal(shared.length, all.length, "no scenario left out");
+  assert.match(r.stdout, /every scenario \(\d+\), opening on the agenda ward-review/);
+  const wrong = spawnSync(process.execPath, [cli, "share", dir, `--out=${out}`, "--opens=nope"], { encoding: "utf8" });
+  assert.match(wrong.stderr, /--opens: no agendas\/nope\.yaml in lab/);
+  const both = spawnSync(process.execPath, [cli, "share", dir, `--out=${out}`, "--opens=ward-review", "--agenda=ward-review"], { encoding: "utf8" });
+  assert.notEqual(both.status, 0);
+});
+
 test("statestorm skills in a folder with no model yet says what is missing, not only how to call it", () => {
   const dir = mkdtempSync(join(tmpdir(), "statestorm-new-"));
   const r = spawnSync(process.execPath, [cli, "skills", dir], { encoding: "utf8" });

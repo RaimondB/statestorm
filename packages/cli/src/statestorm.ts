@@ -12,14 +12,15 @@
  *   statestorm c4 <domain folder> [--diagram=context|container] [--system=<names>] [--context=<names>]   a part in focus, Mermaid C4 (ADR 0036)
  *   statestorm dev   <domain folder>... [--port=5181] [--name=<name>]   the workbench on these domains, read fresh on every load
  *   statestorm build <domain folder>... --out=<dir> [--name=<name>] [--without=<views>]   a static site, for any web server
- *   statestorm share <domain folder>... [--out=<dir/ or file.html>] [--name=<name>] [--examples] [--without=<views>] [--agenda=<name>]
+ *   statestorm share <domain folder>... [--out=<dir/ or file.html>] [--name=<name>] [--examples] [--without=<views>] [--agenda=<name> | --opens=<name>]
  *                                                                     one HTML file with them inside, to open from disk:
  *                                                                     <name>-<yyyymmddhhmm>.html, traced to its commits
  *
  * `--without=context-map,sequence` leaves those views out of what is built or shared: no tab for
  * them, nothing opens on them. The views are overview, flow, structure, statecharts, context-map,
  * sequence; the workbench on the folder itself (`dev`) shows them all. `--agenda=<name>` (ADR 0025)
- * shares one domain with only the scenarios of `agendas/<name>.yaml`, opening on its first step.
+ * shares one domain with only the scenarios of `agendas/<name>.yaml`, opening on its first step;
+ * `--opens=<name>` shares it whole, opening on that agenda.
  *
  * A domain folder holds model.yaml, scenarios/ and, if it has any, drawings/ (with issues.yaml) and
  * docs/ (its rules, glossary and questions; `check --docs` traces them alone, no runs). The
@@ -58,8 +59,9 @@ const USAGE = `usage:
   statestorm c4 <domain folder> [--diagram=context|container] [--system=<name>,…] [--context=<name>,…]
   statestorm dev   <domain folder>... [--port=5181] [--name=<name>]
   statestorm build <domain folder>... --out=<dir> [--name=<name>] [--without=<views>]
-  statestorm share <domain folder>... [--out=<dir/ or file.html>] [--name=<name>] [--examples] [--without=<views>] [--agenda=<name>]
+  statestorm share <domain folder>... [--out=<dir/ or file.html>] [--name=<name>] [--examples] [--without=<views>] [--agenda=<name> | --opens=<name>]
                    --agenda: only the scenarios of agendas/<name>.yaml, opening on it (one domain folder)
+                   --opens:  every scenario and agenda, opening on agendas/<name>.yaml (one domain folder)
                    --without: views to leave out — ${VIEWS.join(", ")}`;
 
 const flag = (args: string[], name: string) => args.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3);
@@ -85,22 +87,34 @@ function domains(args: string[]) {
 }
 
 /**
- * `--agenda=<name>` (ADR 0025): the one domain with only its agenda's scenarios and that agenda, the
- * file opening on it. An agenda that does not read is an error: a meeting's file must show what it says.
+ * The agenda a shared file opens on (ADR 0025), read against the one domain shared. An agenda that does
+ * not read is an error: a meeting's file must show what it says.
  */
-function onlyAgenda<D extends { name: string; files: Record<string, string> }>(list: D[], name: string): (D & { opens: string })[] {
-  if (list.length !== 1) throw new Error("--agenda shares one domain folder; give one");
+function agendaIn<D extends { name: string; files: Record<string, string> }>(list: D[], name: string, flagName: string) {
+  if (list.length !== 1) throw new Error(`--${flagName} shares one domain folder; give one`);
   const d = list[0]!;
   const text = d.files[`agendas/${name}.yaml`];
   const there = Object.keys(d.files).filter((p) => p.startsWith("agendas/")).map((p) => p.slice(8, -5));
-  if (text === undefined) throw new Error(`--agenda: no agendas/${name}.yaml in ${d.name}${there.length ? ` — there are ${there.join(", ")}` : " — it has no agendas/"}`);
+  if (text === undefined) throw new Error(`--${flagName}: no agendas/${name}.yaml in ${d.name}${there.length ? ` — there are ${there.join(", ")}` : " — it has no agendas/"}`);
   const scenarios = Object.keys(d.files).filter((p) => /^scenarios\/[^/]+\.yaml$/.test(p)).map((p) => p.slice(10, -5));
   const { agenda, errors } = parseAgenda(text, `${name}.yaml`, scenarios);
-  if (!agenda || errors.length > 0) throw new Error(`--agenda: ${errors.join("; ")}`);
+  if (!agenda || errors.length > 0) throw new Error(`--${flagName}: ${errors.join("; ")}`);
+  return { d, agenda };
+}
+
+/** `--agenda=<name>` (ADR 0025): the one domain with only its agenda's scenarios and that agenda, the file opening on it. */
+function onlyAgenda<D extends { name: string; files: Record<string, string> }>(list: D[], name: string): (D & { opens: string })[] {
+  const { d, agenda } = agendaIn(list, name, "agenda");
   const keep = new Set(agenda.items.flatMap((it) => it.scenarios));
   const files = Object.fromEntries(Object.entries(d.files).filter(([p]) =>
     p.startsWith("scenarios/") ? keep.has(p.slice(10, -5)) : p.startsWith("agendas/") ? p === `agendas/${name}.yaml` : true));
   return [{ ...d, files, opens: name }];
+}
+
+/** `--opens=<name>` (ADR 0025, amended): the one domain whole — every scenario, every agenda — the file opening on that agenda. */
+function opensOn<D extends { name: string; files: Record<string, string> }>(list: D[], name: string): (D & { opens: string })[] {
+  const { d } = agendaIn(list, name, "opens");
+  return [{ ...d, opens: name }];
 }
 const manifest = (args: string[]) => JSON.stringify({ domains: domains(args) });
 
@@ -171,7 +185,9 @@ function build(args: string[]): number {
  */
 function share(args: string[]): number {
   const agendaName = flag(args, "agenda");
-  const list = agendaName ? onlyAgenda(domains(args), agendaName) : domains(args);
+  const opensName = flag(args, "opens");
+  if (agendaName && opensName) throw new Error("share takes --agenda (only its scenarios) or --opens (everything, opening on it), not both");
+  const list = agendaName ? onlyAgenda(domains(args), agendaName) : opensName ? opensOn(domains(args), opensName) : domains(args);
   if (list.length === 0) { console.error(USAGE); return 2; }
   if (!existsSync(STANDALONE)) {
     throw new Error(`no standalone site at ${STANDALONE} — in the statestorm repo, run \`pnpm build\` first`);
@@ -205,6 +221,7 @@ function share(args: string[]): number {
   console.log(`statestorm: ${list.map((d) => d.name).join(", ")} in one file, ${out} (${(page.length / 1e6).toFixed(1)} MB) — open it in a browser, or send it`);
   for (const line of said) console.log(`  from ${line}`);
   if (agendaName) console.log(`  the agenda ${agendaName} only: ${Object.keys(list[0]!.files).filter((p) => p.startsWith("scenarios/")).length} scenarios, opening on its first`);
+  if (opensName) console.log(`  every scenario (${Object.keys(list[0]!.files).filter((p) => /^scenarios\/[^/]+\.yaml$/.test(p)).length}), opening on the agenda ${opensName}`);
   if (without(args).length > 0) console.log(`  without ${without(args).join(", ")} — no tab for ${without(args).length > 1 ? "them" : "it"}`);
   // Not an error — a share of work in progress can be wanted — but never silent: the commit in the
   // file would not hold what the file shows.
