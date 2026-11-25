@@ -83,7 +83,7 @@ Status is one of `open`, `claimed — …`, `blocked — <on what>`.
   runs are made (`runs.ts`); measured on a domain of about 200 scenarios.
 
 ### B-18 The sequence draws a policy where it runs
-- **status:** open
+- **status:** claimed — Claude (for raimondb), b18-sequence-policy-placement, 2026-11-25
 - **why:** ADR 0035 places a policy in a part, and the context map uses it. The sequence still draws a
   policy's command from the lifeline that raised the event to the one it commands. A policy run by a
   third part, such as Ordering hearing the bench and commanding a transfer, is drawn as the bench
