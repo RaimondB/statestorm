@@ -65,6 +65,11 @@ commands another, had no arrow of its own in the sequence.
 
   `lab`'s `report_stop` (every step's part tells the sample) and `scans_to_handlings` (one scan reaches
   every handling) follow it.
+- **Amended 2026-11-25: one route per pair.** The context map and the C4 view lay out and label each
+  pair of parts once, as before. What crosses the pair is drawn as strands beside that route: events,
+  commands, and what unplaced policies carry, a few pixels apart. The first strand carries the label and
+  the U and D. Laying out each kind as an edge of its own had spread one pair over several routes and
+  labels.
 - **Rejected:**
   - **A lifeline per policy.** It would be one per rule, many in a real model, and it would split one
     part's reactions over many columns.
