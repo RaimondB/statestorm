@@ -39,3 +39,20 @@ test("an edge is drawn as what crosses it, apart (ADR 0038): events heard, comma
   const notYet = { ...edge, sends: [], unplaced: { events: [], commands: [], policies: [] }, commands: ["Receipt.Print"] };
   assert.deepEqual(drawnEdges([notYet]).map((d) => [d.kind, d.commands]), [["event", ["Receipt.Print"]]]);
 });
+
+test("a pair is laid out and labelled once; what crosses it runs as strands beside that route (ADR 0038)", async () => {
+  const { strandsOf, endsOf, STRAND_GAP } = await import("../src/context-map.ts");
+  const edge = {
+    from: "Shop", to: "Warehouse", events: ["Placed"], commands: ["Ledger.Note"], patterns: [], policies: ["pick", "note"],
+    downstream: ["Warehouse"], heard: ["Placed"], sends: ["Ledger.Note"], unplaced: { events: [], commands: [], policies: [] },
+  };
+  const route = [{ x: 0, y: 0 }, { x: 100, y: 0 }];
+  const label = { x: 40, y: -8, width: 50, height: 16, text: "Placed +1" };
+  const s = strandsOf(edge, route, label);
+  assert.deepEqual(s.map((e) => e.kind), ["event", "command"]);
+  assert.deepEqual(s.map((e) => e.points.map((p) => p.y)), [[-STRAND_GAP / 2, -STRAND_GAP / 2], [STRAND_GAP / 2, STRAND_GAP / 2]], "side by side along the one route");
+  assert.deepEqual(s.map((e) => e.points.map((p) => p.x)), [[0, 100], [0, 100]]);
+  assert.deepEqual(s.map((e) => e.label?.text), ["Placed +1", undefined], "one label for the pair, where it always was");
+  assert.deepEqual(s.map((e) => endsOf(e).length), [2, 0], "U and D once");
+  assert.deepEqual(strandsOf({ ...edge, sends: [], commands: [] }, route).map((e) => e.points), [route], "one kind: on the route itself");
+});

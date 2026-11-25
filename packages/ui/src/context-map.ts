@@ -14,7 +14,12 @@ export interface PlacedNode extends MapNode { x: number; y: number; width: numbe
 /** ADR 0038: an edge as drawn — events heard (orange, dashed), commands sent (blue, solid), or what policies placed nowhere carry (red). */
 export type EdgeKind = "event" | "command" | "unplaced";
 export interface DrawnEdge extends MapEdge { kind: EdgeKind }
-export interface PlacedEdge extends DrawnEdge { points: { x: number; y: number }[]; label?: { x: number; y: number; width: number; height: number; text: string } }
+export interface PlacedEdge extends DrawnEdge {
+  points: { x: number; y: number }[];
+  label?: { x: number; y: number; width: number; height: number; text: string };
+  /** A strand after the first along one pair's route (ADR 0038): its label and its U and D are the first's. */
+  strand?: number;
+}
 
 /**
  * ADR 0038: one map edge drawn as what crosses it, apart — the events heard (and what an unplaced
@@ -30,6 +35,35 @@ export function drawnEdges(edges: MapEdge[]): DrawnEdge[] {
     if (e.unplaced.policies.length) out.push({ ...e, kind: "unplaced", events: e.unplaced.events, commands: e.unplaced.commands, policies: e.unplaced.policies, downstream: [], patterns: out.length ? [] : e.patterns });
     return out.length ? out : [{ ...e, kind: "event" }];
   });
+}
+
+/** How far apart the strands of one pair run, beside their route. */
+export const STRAND_GAP = 4;
+
+type Point = { x: number; y: number };
+/** A polyline moved sideways by `d`, each corner along the mean of the normals of the segments meeting there. */
+export function offsetLine(points: Point[], d: number): Point[] {
+  if (d === 0 || points.length < 2) return points;
+  const normal = (a: Point, b: Point) => { const len = Math.hypot(b.x - a.x, b.y - a.y) || 1; return { x: -(b.y - a.y) / len, y: (b.x - a.x) / len }; };
+  return points.map((p, i) => {
+    const ns = [i > 0 ? normal(points[i - 1]!, p) : undefined, i < points.length - 1 ? normal(p, points[i + 1]!) : undefined].filter((n): n is Point => !!n);
+    const n = { x: ns.reduce((t, v) => t + v.x, 0) / ns.length, y: ns.reduce((t, v) => t + v.y, 0) / ns.length };
+    const len = Math.hypot(n.x, n.y) || 1;
+    return { x: p.x + (n.x / len) * d, y: p.y + (n.y / len) * d };
+  });
+}
+
+/**
+ * ADR 0038, on the layout of one route per pair: the pair is laid out and labelled once, as before
+ * colour, and what crosses it is drawn as strands beside that route — events, commands, unplaced.
+ * The first strand carries the label and the U and D.
+ */
+export function strandsOf(e: MapEdge, points: Point[], label?: PlacedEdge["label"]): PlacedEdge[] {
+  const kinds = drawnEdges([e]);
+  return kinds.map((k, i) => ({
+    ...k, points: offsetLine(points, (i - (kinds.length - 1) / 2) * STRAND_GAP),
+    ...(i === 0 && label ? { label } : {}), ...(i > 0 ? { strand: i } : {}),
+  }));
 }
 
 /** Laid out against the way it travels: its one downstream end is where its messages start (a command sent from there). */
@@ -58,7 +92,6 @@ export function labelOf(e: MapEdge): string {
 export async function layoutMap(map: ContextMap, measure: Measure = estimate): Promise<MapLayout> {
   const { default: ELK } = await import("elkjs/lib/elk.bundled.js");
   const elk = new ELK();
-  const drawn = drawnEdges(map.edges);
   const sized = map.nodes.map((n) => {
     const lines = linesOf(n);
     const width = Math.max(MAP.minW, measure(n.id, "title") + 2 * MAP.pad, ...lines.map((l) => measure(l, "label") + 2 * MAP.pad));
@@ -77,7 +110,7 @@ export async function layoutMap(map: ContextMap, measure: Measure = estimate): P
       "elk.padding": "[top=20,left=20,bottom=20,right=20]",
     },
     children: sized.map((n) => ({ id: n.id, width: n.width, height: n.height })),
-    edges: drawn.map((e, i): ElkExtendedEdge => {
+    edges: map.edges.map((e, i): ElkExtendedEdge => {
       const text = labelOf(e);
       return { id: `e${i}`, sources: [upward(e) ? e.to : e.from], targets: [upward(e) ? e.from : e.to], labels: text ? [{ id: `l${i}`, text, width: measure(text, "label") + 8, height: 16 }] : [] };
     }),
@@ -85,13 +118,13 @@ export async function layoutMap(map: ContextMap, measure: Measure = estimate): P
   const out = await elk.layout(graph);
   const at = new Map((out.children ?? []).map((c) => [c.id, c]));
   const nodes: PlacedNode[] = sized.map((n) => ({ ...n, x: at.get(n.id)?.x ?? 0, y: at.get(n.id)?.y ?? 0 }));
-  const edges: PlacedEdge[] = drawn.map((e, i) => {
+  const edges: PlacedEdge[] = map.edges.flatMap((e, i) => {
     const laid = (out.edges ?? []).find((x) => x.id === `e${i}`) as ElkExtendedEdge | undefined;
     const s = laid?.sections?.[0];
     const laidOut = s ? [s.startPoint, ...(s.bendPoints ?? []), s.endPoint] : [];
     const points = upward(e) ? laidOut.reverse() : laidOut;
     const l = laid?.labels?.[0];
-    return { ...e, points, ...(l && l.text ? { label: { x: l.x ?? 0, y: l.y ?? 0, width: l.width ?? 0, height: l.height ?? 0, text: l.text } } : {}) };
+    return strandsOf(e, points, l && l.text ? { x: l.x ?? 0, y: l.y ?? 0, width: l.width ?? 0, height: l.height ?? 0, text: l.text } : undefined);
   });
   return { width: out.width ?? 0, height: out.height ?? 0, nodes, edges };
 }
@@ -101,7 +134,7 @@ export async function layoutMap(map: ContextMap, measure: Measure = estimate): P
  * segment — the upstream end U, the downstream end D; both D when each depends on the other.
  */
 export function endsOf(e: PlacedEdge): { x: number; y: number; text: "U" | "D" }[] {
-  if (e.downstream.length === 0 || e.points.length < 2) return [];
+  if (e.strand || e.downstream.length === 0 || e.points.length < 2) return [];
   const near = (a: { x: number; y: number }, b: { x: number; y: number }) => {
     const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
     const d = Math.min(22, len / 3);
