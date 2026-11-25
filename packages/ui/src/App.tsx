@@ -20,6 +20,7 @@ import { Flow } from "./views/Flow.tsx";
 import { Structure } from "./views/Structure.tsx";
 import { ContextMap } from "./views/ContextMap.tsx";
 import { Sequence, type SequenceState } from "./views/Sequence.tsx";
+import { C4View, defaultFocus, type C4State } from "./views/C4.tsx";
 import { Docs, type DocLinks, type DocPlace } from "./views/Docs.tsx";
 import { Journey } from "./views/Journey.tsx";
 import { docsFromFiles, trace } from "./check/docs-core.ts";
@@ -61,6 +62,8 @@ function saveChoice(c: Choice) {
  * over what this browser remembers; the address is kept current as the reader moves.
  */
 type Link = { choice?: Choice; view?: View; sequence?: Partial<SequenceState>; doc?: DocPlace; focus?: string; events?: EventsMode; lines?: string[];
+  /** The C4 view's diagram and focus (ADR 0036): `diagram=`, `systems=`, `contexts=`. */
+  c4?: C4State;
   /** A named overview (ADR 0034). */
   overview?: string;
   /** An agenda (ADR 0025) and the step of it shown. */
@@ -81,6 +84,7 @@ function readLink(): Link {
       ...(["statuses", "requests", "all"].includes(q.get("events") ?? "") ? { events: q.get("events") as EventsMode } : {}),
       ...(q.get("lines") ? { lines: q.get("lines")!.split(",").filter(Boolean) } : {}),
       ...(q.get("overview") ? { overview: q.get("overview")! } : {}),
+      ...(q.has("systems") || q.has("contexts") ? { c4: { diagram: q.get("diagram") === "container" ? "container" : "context", systems: list("systems") ?? [], contexts: list("contexts") ?? [] } } : {}),
       ...(q.get("agenda") ? { agenda: { name: q.get("agenda")!, step: Math.max(0, Number(q.get("step") ?? 1) - 1) || 0 } } : {}),
     };
   } catch { return {}; }
@@ -91,19 +95,19 @@ const remembered = link.choice ?? readChoice();
 const initialExample = EXAMPLES.find((e) => e.name === remembered?.example) ?? EXAMPLES.find((e) => e.name === "sales") ?? EXAMPLES[0]!;
 
 type Theme = "auto" | "light" | "dark";
-type Center = "overview" | "journey" | "flow" | "structure" | "charts" | "map" | "sequence" | "docs";
+type Center = "overview" | "journey" | "flow" | "structure" | "charts" | "map" | "c4" | "sequence" | "docs";
 /** Every centre view, in tab order, and what `statestorm share --without=…` calls it. */
 const CENTERS: { center: Center; view: View }[] = [
   { center: "overview", view: "overview" }, { center: "journey", view: "journey" }, { center: "flow", view: "flow" },
   { center: "structure", view: "structure" }, { center: "charts", view: "statecharts" },
-  { center: "map", view: "context-map" }, { center: "sequence", view: "sequence" }, { center: "docs", view: "docs" },
+  { center: "map", view: "context-map" }, { center: "c4", view: "c4" }, { center: "sequence", view: "sequence" }, { center: "docs", view: "docs" },
 ];
 function readCenter(): Center {
   const linked = CENTERS.find((c) => c.view === link.view);
   if (linked) return linked.center;
   try {
     const v = localStorage.getItem("statestorm.center");
-    return v === "charts" || v === "journey" || v === "flow" || v === "structure" || v === "map" || v === "sequence" || v === "docs" ? v : "overview";
+    return v === "charts" || v === "journey" || v === "flow" || v === "structure" || v === "map" || v === "c4" || v === "sequence" || v === "docs" ? v : "overview";
   } catch { return "overview"; }
 }
 function readTheme(): Theme {
@@ -233,6 +237,11 @@ export function App() {
     ignored: seqChoice.ignored,
   };
   const chooseSeq = (next: SequenceState) => setSeqChoice({ ...next, example: exampleName, scenario: scenario?.file });
+  // The C4 view's focus holds for the model it was chosen in; another model opens on its own first system.
+  const [c4Choice, setC4Choice] = useState<(C4State & { example?: string }) | undefined>(link.c4 ? { ...link.c4, example: link.choice?.example } : undefined);
+  const c4State: C4State = c4Choice && c4Choice.example === exampleName
+    ? c4Choice : { diagram: c4Choice?.diagram ?? "context", ...(model ? defaultFocus(model) : { systems: [], contexts: [] }) };
+  const chooseC4 = (next: C4State) => setC4Choice({ ...next, example: exampleName });
   // The domain's scenarios run while the browser is idle, so a view that reads them all (Flow) is ready
   // when it is opened, and the page never waits on them.
   useEffect(() => {
@@ -403,6 +412,11 @@ export function App() {
     if ((center === "overview" || center === "journey") && eventsMode !== "requests") q.set("events", eventsMode);
     if (center === "journey" && journeyLines) q.set("lines", journeyLines.join(","));
     if (center === "overview" && overviewName) q.set("overview", overviewName);
+    if (center === "c4") {
+      q.set("diagram", c4State.diagram);
+      q.set("systems", c4State.systems.join(","));
+      q.set("contexts", c4State.contexts.join(","));
+    }
     if (center === "sequence") {
       if (seqState.open) q.set("open", seqState.open.join(","));
       if (seqState.toggled.length) q.set("toggled", seqState.toggled.join(","));
@@ -607,6 +621,8 @@ export function App() {
               {model.systems && <>
                 {shows("map") && <button role="tab" aria-selected={center === "map"} className={center === "map" ? "active" : ""}
                   onClick={() => setCenter("map")} title="Which systems, bounded contexts and sub-systems talk to which (ADR 0018)">Context map</button>}
+                {shows("c4") && <button role="tab" aria-selected={center === "c4"} className={center === "c4" ? "active" : ""}
+                  onClick={() => setCenter("c4")} title="One team's part in focus — the systems and contexts you pick, and only what they talk to — as a C4 system context or container diagram (ADR 0036)">C4</button>}
                 {shows("sequence") && <button role="tab" aria-selected={center === "sequence"} className={center === "sequence" ? "active" : ""}
                   onClick={() => setCenter("sequence")} title="The scenario as a sequence diagram: only what crosses a boundary (ADR 0018)">Sequence</button>}
               </>}
@@ -615,9 +631,11 @@ export function App() {
               <button style={{ marginLeft: "auto" }} className={wide ? "active" : ""} onClick={() => setWide(!wide)}
                 title="Hide the side panels — for presenting">{wide ? "⤡ panels" : "⤢ wide"}</button>
             </div>
-            {(center === "map" || center === "sequence") && model.systems
-              ? (center === "map" ? <ContextMap model={model} select={selectAndFocus} /> : <Sequence model={model} run={run} index={index} onIndex={setIndex} state={seqState} onState={chooseSeq} select={selectAndFocus} />)
-              : center === "overview" || center === "map" || center === "sequence"
+            {(center === "map" || center === "c4" || center === "sequence") && model.systems
+              ? (center === "map" ? <ContextMap model={model} select={selectAndFocus} />
+                : center === "c4" ? <C4View model={model} state={c4State} onState={chooseC4} select={selectAndFocus} />
+                : <Sequence model={model} run={run} index={index} onIndex={setIndex} state={seqState} onState={chooseSeq} select={selectAndFocus} />)
+              : center === "overview" || center === "map" || center === "c4" || center === "sequence"
               ? <Overview model={model} run={run} index={index} since={from} selection={selection} select={select} onIndex={setIndex} eventsMode={eventsMode} onEventsMode={setEventsMode}
                   {...(overviewName ? { view: overviewName } : {})} onView={setOverviewName} />
               : center === "journey"

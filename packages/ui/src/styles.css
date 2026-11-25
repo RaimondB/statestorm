@@ -599,6 +599,30 @@ ol.log .chain { grid-column: 4; font-size: 0.85rem; color: var(--muted); }
 .seq-toggle:hover rect { stroke: var(--accent); }
 .seq-toggle text { font: 700 12px var(--sans); fill: var(--fg); }
 .map-node { cursor: pointer; }
+/* ---- a part in focus, as C4 (ADR 0036): the focus filled, the parts around it outlined */
+.c4-focus { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.c4-chip { display: inline-flex; align-items: center; gap: 2px; padding: 1px 2px 1px 8px; border-radius: 12px; background: var(--accent-soft); border: 1px solid var(--accent); font-size: 0.85rem; white-space: nowrap; }
+.c4-chip.context { border-style: dashed; }
+.c4-chip button { border: none; background: none; padding: 0 5px; color: var(--muted); line-height: 1; }
+.c4-chip button:hover { color: var(--fg); }
+.map-key.c4-in { background: var(--accent-soft); border-color: var(--accent); }
+.c4-boundary rect { fill: none; stroke: var(--muted); stroke-width: 1.4; stroke-dasharray: 7 5; }
+.c4-boundary.external rect { stroke: var(--line); }
+.c4-boundary-name { font: 700 14px var(--sans); fill: var(--fg); }
+.c4-boundary-kind { font: 12px var(--sans); fill: var(--muted); }
+.c4-node rect { fill: var(--surface); stroke: var(--fg); stroke-width: 1.5; }
+.c4-node.subsystem rect { stroke: var(--command); }
+.c4-node.context rect { stroke: var(--accent); }
+.c4-node.external rect { fill: var(--bg); stroke: var(--muted); stroke-dasharray: 6 4; }
+.c4-node.in rect { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2.2; stroke-dasharray: none; }
+.c4-note { font: italic 12px var(--sans); fill: var(--muted); }
+.c4-toggle { cursor: pointer; }
+.c4-toggle circle { fill: var(--surface); stroke: var(--muted); stroke-width: 1; opacity: 0.85; }
+.c4-toggle text { font: 700 12px var(--sans); fill: var(--muted); }
+.c4-toggle:hover circle { stroke: var(--accent); opacity: 1; }
+.c4-toggle:hover text { fill: var(--accent); }
+.c4-foot { padding: 4px 12px 8px; }
+
 .map-node:hover rect { stroke: var(--accent); }
 .seq-frame-box { fill: none; stroke: var(--muted); stroke-width: 1.2; }
 .seq-frame.repeat .seq-frame-box { stroke-dasharray: 5 4; }

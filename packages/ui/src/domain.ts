@@ -20,7 +20,7 @@ export interface Example {
 }
 
 /** The views of the centre pane, by the name the `--without` flag uses. */
-export const VIEWS = ["overview", "journey", "flow", "structure", "statecharts", "context-map", "sequence", "docs"] as const;
+export const VIEWS = ["overview", "journey", "flow", "structure", "statecharts", "context-map", "c4", "sequence", "docs"] as const;
 export type View = typeof VIEWS[number];
 
 const base = (path: string) => path.split("/").pop()!.replace(/\.yaml$/, "");

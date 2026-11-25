@@ -6,7 +6,7 @@ import { estimate, type Measure } from "../chart-layout.ts";
 
 const FONTS = { title: "700 14px system-ui, sans-serif", label: "12px system-ui, sans-serif", small: "12px ui-monospace, monospace" };
 let ctx: CanvasRenderingContext2D | null | undefined;
-const measure: Measure = (text, font) => {
+export const measure: Measure = (text, font) => {
   ctx ??= document.createElement("canvas").getContext("2d");
   if (!ctx) return estimate(text, font);
   ctx.font = FONTS[font];
