@@ -645,7 +645,15 @@ function crossingsOf(model: Model): Crossing[] {
 export function contextMap(model: Model, level: Level, scope?: string): ContextMap {
   if (!model.systems) throw new SystemsError("the model declares no `systems:` (ADR 0018)");
   const nodes = nodesAt(model, level, scope);
-  const group = (p: Place | undefined) => groupOf(p, level, scope);
+  return { level, ...(scope ? { scope } : {}), nodes, edges: edgesBy(model, (p) => groupOf(p, level, scope)) };
+}
+
+/**
+ * The edges between the groups `group` puts each place in — the context map's at a level, the C4 view's
+ * around its focus (ADR 0036). `nameOf` gives a group's name, which a declared relation names.
+ */
+function edgesBy(model: Model, group: (p: Place | undefined) => string, nameOf: (id: string) => string = (id) => id): MapEdge[] {
+  const sys = model.systems!;
   const at = (type: string) => group(placeOf(model, type));
   const raisers = new Map<string, string[]>();
   for (const m of Object.values(model.aggregates)) if (!m.abstract) for (const e of eventsRaisedBy(m)) raisers.set(e, [...(raisers.get(e) ?? []), m.name]);
@@ -664,8 +672,8 @@ export function contextMap(model: Model, level: Level, scope?: string): ContextM
     const from = group(c.from), to = group(c.to);
     add(from, to, c.event, c.command, c.policy, c.down === "from" ? from : c.down === "to" ? to : undefined);
   }
-  for (const part of model.systems.subsystems.filter((s) => s.external)) {
-    const from = groupOf(placeOfSubsystem(model, part), level, scope);
+  for (const part of sys.subsystems.filter((s) => s.external)) {
+    const from = group(placeOfSubsystem(model, part));
     for (const s of part.sends ?? []) add(from, at(s.type), undefined, `${s.type}.${s.command}`);
     for (const e of part.receives ?? []) for (const r of raisers.get(e) ?? []) add(at(r), from, e);
   }
@@ -673,13 +681,14 @@ export function contextMap(model: Model, level: Level, scope?: string): ContextM
   // Each depends on the other: an edge either way between them that says so (ADR 0035 §5).
   const depends = new Set(list.flatMap((e) => e.downstream.map((d) => `${d}\u0000${d === e.from ? e.to : e.from}`)));
   for (const e of list) if (depends.has(`${e.from}\u0000${e.to}`) && depends.has(`${e.to}\u0000${e.from}`)) e.mutual = true;
-  for (const r of model.systems.relations) {
-    const between = list.filter((x) => (x.from === r.upstream && x.to === r.downstream) || (x.from === r.downstream && x.to === r.upstream));
+  for (const r of sys.relations) {
+    const named = (x: MapEdge, a: string, b: string) => nameOf(x.from) === a && nameOf(x.to) === b;
+    const between = list.filter((x) => named(x, r.upstream, r.downstream) || named(x, r.downstream, r.upstream));
     between[0]?.patterns.push(r.pattern);
     // What the policies do not say, a declared relation does (ADR 0035 §4).
-    for (const e of between) if (e.downstream.length === 0) e.downstream.push(r.downstream);
+    for (const e of between) if (e.downstream.length === 0) e.downstream.push(nameOf(e.from) === r.downstream ? e.from : e.to);
   }
-  return { level, ...(scope ? { scope } : {}), nodes, edges: list };
+  return list;
 }
 
 /** ADR 0035: the parts each depends on, at a level — from the placed policies only. */
@@ -806,11 +815,126 @@ export function contextMapToMermaid(m: ContextMap): string {
       : n.spans ? `${n.id}<br/>(${n.spans.join(", ")})` : n.library ? `${n.id}<br/>library: ${n.library.join(", ")}` : n.id;
     lines.push(n.kind === "external" ? `  ${mid(n.id)}[/"${label}"/]` : n.kind === "domain" ? `  ${mid(n.id)}(["${label}"])` : `  ${mid(n.id)}["${label}"]`);
   }
-  for (const e of m.edges) {
-    const said = [...e.events, ...e.commands.filter((c) => !e.events.includes(c)).map((c) => `${c}()`)];
-    const ends = e.downstream.length === 2 ? "D ↔ D" : e.downstream[0] === e.to ? "U → D" : e.downstream[0] === e.from ? "D → U" : "";
-    const what = [...(ends ? [ends] : []), ...e.patterns.map((p) => `«${p}»`), ...said.slice(0, 4), ...(said.length > 4 ? [`+${said.length - 4} more`] : [])].join(", ");
-    lines.push(`  ${mid(e.from)} -->|"${what}"| ${mid(e.to)}`);
+  for (const e of m.edges) lines.push(`  ${mid(e.from)} -->|"${edgeText(e)}"| ${mid(e.to)}`);
+  return lines.join("\n") + "\n";
+}
+
+/** What an edge says in Mermaid: which end is downstream, its patterns, and the first few of what crosses it. */
+function edgeText(e: MapEdge): string {
+  const said = [...e.events, ...e.commands.filter((c) => !e.events.includes(c)).map((c) => `${c}()`)];
+  const ends = e.downstream.length === 2 ? "D ↔ D" : e.downstream[0] === e.to ? "U → D" : e.downstream[0] === e.from ? "D → U" : "";
+  return [...(ends ? [ends] : []), ...e.patterns.map((p) => `«${p}»`), ...said.slice(0, 4), ...(said.length > 4 ? [`+${said.length - 4} more`] : [])].join(", ");
+}
+
+// ------------------------------------------------------------------ a part in focus, as C4 (ADR 0036)
+
+export type C4Diagram = "context" | "container";
+export const C4_DIAGRAMS: C4Diagram[] = ["context", "container"];
+/** What the reader put in the middle: systems (ours or external) and bounded contexts, by name. */
+export interface C4Focus { systems: string[]; contexts: string[] }
+export interface C4Node {
+  /** Unique among the nodes: `system:Lab`, `context:Lab/Testing`, `subsystem:Lab/Bench`. */
+  id: string;
+  name: string;
+  kind: "system" | "external" | "context" | "subsystem";
+  /** In the focus: drawn filled. A neighbour: outlined. */
+  focus: boolean;
+  /** The system whose boundary it is drawn inside. */
+  boundary?: string;
+  /** A sub-system of an external system. */
+  external?: boolean;
+  /** A sub-system's bounded context. */
+  context?: string;
+  team?: string;
+  note?: string;
+}
+export interface C4Boundary { name: string; external: boolean; note?: string }
+export interface C4View { diagram: C4Diagram; focus: C4Focus; nodes: C4Node[]; boundaries: C4Boundary[]; edges: MapEdge[] }
+
+/** The sub-systems a focus stands for: all of each system's, and each context's. */
+export function subsystemsInFocus(model: Model, focus: C4Focus): SubsystemDef[] {
+  const sys = model.systems;
+  if (!sys) throw new SystemsError("the model declares no `systems:` (ADR 0018)");
+  for (const s of focus.systems) if (!sys.systems.some((x) => x.name === s)) throw new SystemsError(`focus: there is no system called \`${s}\` (${sys.systems.map((x) => x.name).join(", ")})`);
+  for (const c of focus.contexts) if (!sys.contexts.some((x) => x.name === c)) throw new SystemsError(`focus: there is no bounded context called \`${c}\` (${sys.contexts.map((x) => x.name).join(", ")})`);
+  return sys.subsystems.filter((s) => focus.systems.includes(s.system) || focus.contexts.includes(s.context));
+}
+
+/**
+ * ADR 0036: the focus and every part it exchanges a message with, as a C4 system context or container
+ * diagram — the context map's edges, grouped around the focus, only those with an end in it.
+ */
+export function c4Of(model: Model, diagram: C4Diagram, focus: C4Focus): C4View {
+  const sys = model.systems!;
+  const inFocus = subsystemsInFocus(model, focus);
+  if (inFocus.length === 0) throw new SystemsError("focus: name a system or a bounded context to put in the middle");
+  const F = new Set(inFocus.map((s) => `${s.system}/${s.name}`));
+  // A system the focus holds only some parts of: its other parts are drawn by name, beside the focus.
+  const partial = new Set(sys.subsystems.filter((s) => !F.has(`${s.system}/${s.name}`) && inFocus.some((f) => f.system === s.system)).map((s) => s.system));
+  const key = (p: Place | undefined): string => {
+    if (!p) return "system:(no system)";
+    const here = F.has(`${p.system}/${p.subsystem}`);
+    if (diagram === "container") return here || partial.has(p.system) ? `subsystem:${p.system}/${p.subsystem}` : `system:${p.system}`;
+    if (!partial.has(p.system)) return `system:${p.system}`;
+    return here ? `context:${p.system}/${p.context}` : `subsystem:${p.system}/${p.subsystem}`;
+  };
+  const nameOf = (id: string) => id.slice(id.indexOf(":") + 1).replace(/^.*\//, "");
+  const edges = edgesBy(model, key, nameOf);
+  const focused = new Set(inFocus.map((s) => key(placeOfSubsystem(model, s))));
+  const kept = edges.filter((e) => focused.has(e.from) || focused.has(e.to));
+  const ids = new Set([...focused, ...kept.flatMap((e) => [e.from, e.to])]);
+
+  const order = (id: string) => {
+    const [kind, rest] = [id.slice(0, id.indexOf(":")), id.slice(id.indexOf(":") + 1)];
+    const system = kind === "system" ? rest : rest.slice(0, rest.indexOf("/"));
+    const si = sys.systems.findIndex((s) => s.name === system);
+    const sub = sys.subsystems.findIndex((s) => s.system === system && (kind === "subsystem" ? s.name === nameOf(id) : s.context === nameOf(id)));
+    return [focused.has(id) ? 0 : 1, si < 0 ? sys.systems.length : si, sub];
+  };
+  const before = (a: string, b: string) => { const x = order(a), y = order(b); return x[0]! - y[0]! || x[1]! - y[1]! || x[2]! - y[2]!; };
+  const nodes = [...ids].sort(before).map((id): C4Node => {
+    const name = nameOf(id);
+    const focus = focused.has(id);
+    if (id.startsWith("system:")) {
+      const s = sys.systems.find((x) => x.name === name);
+      return { id, name, kind: s?.external ? "external" : "system", focus, ...(s?.note ? { note: s.note } : {}) };
+    }
+    const system = id.slice(id.indexOf(":") + 1, id.lastIndexOf("/"));
+    if (id.startsWith("context:")) {
+      const c = sys.contexts.find((x) => x.name === name);
+      return { id, name, kind: "context", focus, boundary: system, ...(c?.team ? { team: c.team } : {}), ...(c?.note ? { note: c.note } : {}) };
+    }
+    const sub = sys.subsystems.find((x) => x.system === system && x.name === name)!;
+    const team = sys.contexts.find((x) => x.name === sub.context)?.team;
+    return { id, name, kind: "subsystem", focus, boundary: system, ...(sub.external ? { external: true } : {}), context: sub.context,
+      ...(team ? { team } : {}), ...(sub.note ? { note: sub.note } : {}) };
+  });
+  const boundaries = sys.systems.filter((s) => nodes.some((n) => n.boundary === s.name))
+    .map((s): C4Boundary => ({ name: s.name, external: s.external, ...(s.note ? { note: s.note } : {}) }));
+  return { diagram, focus, nodes, boundaries, edges: kept };
+}
+
+/** Mermaid's C4 diagrams (ADR 0036 §5): `C4Context` or `C4Container`, a neighbour of our own greyed. */
+export function c4ToMermaid(v: C4View): string {
+  const q = (s: string) => s.replace(/"/g, "'");
+  const what = [...v.focus.systems, ...v.focus.contexts].join(", ");
+  const lines = [v.diagram === "context" ? "C4Context" : "C4Container", `  title ${v.diagram === "context" ? "System context" : "Containers"} of ${what}`];
+  const element = (n: C4Node, indent: string) => {
+    const a = mid(n.id);
+    if (n.kind === "subsystem") {
+      const said = [n.context ? `context: ${n.context}` : "", n.team ? `team: ${n.team}` : ""].filter(Boolean).join(", ");
+      lines.push(`${indent}${n.external ? "Container_Ext" : "Container"}(${a}, "${q(n.name)}", "${q(said)}", "${q(n.note ?? "")}")`);
+    } else if (n.kind === "context") {
+      lines.push(`${indent}System(${a}, "${q(n.name)}", "${q(["«bounded context»", n.team ? `team: ${n.team}` : "", n.note ?? ""].filter(Boolean).join(" — "))}")`);
+    } else lines.push(`${indent}${n.kind === "external" ? "System_Ext" : "System"}(${a}, "${q(n.name)}", "${q(n.note ?? "")}")`);
+  };
+  for (const n of v.nodes.filter((x) => !x.boundary)) element(n, "  ");
+  for (const b of v.boundaries) {
+    lines.push(`  System_Boundary(${mid(`boundary:${b.name}`)}, "${q(b.name)}${b.external ? " «external»" : ""}") {`);
+    for (const n of v.nodes.filter((x) => x.boundary === b.name)) element(n, "    ");
+    lines.push("  }");
   }
+  for (const e of v.edges) lines.push(`  Rel(${mid(e.from)}, ${mid(e.to)}, "${q(edgeText(e))}")`);
+  for (const n of v.nodes) if (!n.focus && n.kind !== "external" && !n.external) lines.push(`  UpdateElementStyle(${mid(n.id)}, $bgColor="grey", $borderColor="grey")`);
   return lines.join("\n") + "\n";
 }

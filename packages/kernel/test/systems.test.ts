@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { loadModel } from "../src/model.ts";
-import { choiceOfEvent, contextMap, contextMapToMermaid, placeOf, receiversOfEvent, scopesOf, senderOfCommand } from "../src/systems.ts";
+import { c4Of, c4ToMermaid, choiceOfEvent, contextMap, contextMapToMermaid, placeOf, receiversOfEvent, scopesOf, senderOfCommand } from "../src/systems.ts";
 
 // ADR 0018 and ADR 0020, on the lab example: one system of its own in three sub-systems, a vendor's
 // patient portal that runs what the model specifies, a scanner vendor in three parts, two domains.
@@ -180,4 +180,64 @@ test("the check warns (ADR 0035): policies left unplaced, two parts depending on
   // A relation that says the portal is upstream, while the portal hears the lab.
   const turned = LAB.replace("{ upstream: Lab, downstream: Patient portal, pattern: customer-supplier }", "{ upstream: Patient portal, downstream: Lab, pattern: customer-supplier }");
   assert.ok(warns(turned).some((m) => /^relations: Patient portal → Lab \(customer-supplier\) — the policies make Patient portal depend on Lab \(\w+\), not the other way/.test(m)), warns(turned).join("\n"));
+});
+
+test("a system in focus (ADR 0036): its context, or its containers in its boundary — and only the parts it talks to", () => {
+  const context = c4Of(lab, "context", { systems: ["Lab"], contexts: [] });
+  assert.deepEqual(context.nodes.map((n) => `${n.name}:${n.kind}${n.focus ? "*" : ""}`),
+    ["Lab:system*", "Patient portal:external", "Hospital information system:external", "Scanners:external"]);
+  assert.equal(context.nodes.find((n) => n.name === "Messaging"), undefined, "told only by the portal: no crossing to the focus, left out");
+  assert.equal(context.edges.find((e) => e.from === "system:Patient portal"), undefined, "the edge between two neighbours is left out");
+  assert.deepEqual(context.boundaries, [], "a system held whole is a box, not a boundary");
+  const toPortal = context.edges.find((e) => e.from === "system:Lab" && e.to === "system:Patient portal")!;
+  assert.deepEqual([toPortal.patterns, toPortal.downstream], [["customer-supplier"], ["system:Patient portal"]], "the map's relations and its U and D (ADR 0035)");
+
+  const containers = c4Of(lab, "container", { systems: ["Lab"], contexts: [] });
+  assert.deepEqual(containers.nodes.filter((n) => n.focus).map((n) => `${n.name} in ${n.boundary} (${n.context})`),
+    ["Ordering in Lab (Requests)", "Logistics in Lab (Sample logistics)", "Bench in Lab (Testing)"]);
+  assert.deepEqual(containers.boundaries.map((b) => b.name), ["Lab"]);
+  assert.ok(containers.edges.some((e) => e.from === "system:Hospital information system" && e.to === "subsystem:Lab/Bench" && e.commands.includes("Analysis.Plan")),
+    "a neighbour's message reaches the container that answers it");
+  assert.deepEqual(containers.edges.find((e) => e.from === "subsystem:Lab/Bench" && e.to === "subsystem:Lab/Logistics")!.downstream, ["subsystem:Lab/Bench"]);
+  const text = c4ToMermaid(containers);
+  assert.match(text, /^C4Container\n  title Containers of Lab\n/);
+  assert.match(text, /System_Boundary\(boundary_Lab, "Lab"\) \{\n    Container\(subsystem_Lab_Ordering, "Ordering", "context: Requests, team: orders", "the request and its route"\)/);
+  assert.match(text, /Rel\(system_Hospital_information_system, subsystem_Lab_Bench, "Analysis.Plan\(\)"\)/);
+});
+
+test("a bounded context in focus (ADR 0036): inside its system's boundary, with the sibling parts it talks to by name", () => {
+  const context = c4Of(lab, "context", { systems: [], contexts: ["Testing"] });
+  assert.deepEqual(context.nodes.map((n) => `${n.name}:${n.kind}${n.focus ? "*" : ""}${n.boundary ? ` in ${n.boundary}` : ""}`),
+    ["Testing:context* in Lab", "Logistics:subsystem in Lab", "Hospital information system:external"]);
+  assert.equal(context.nodes.find((n) => n.name === "Ordering"), undefined, "a sibling the bench never talks to is left out");
+  const containers = c4Of(lab, "container", { systems: [], contexts: ["Testing"] });
+  assert.deepEqual(containers.nodes.map((n) => `${n.name}${n.focus ? "*" : ""}`), ["Bench*", "Logistics", "Hospital information system"]);
+  assert.match(c4ToMermaid(containers), /UpdateElementStyle\(subsystem_Lab_Logistics, \$bgColor="grey"/, "a neighbour of our own, greyed");
+  // The relation declared with the Requests context labels its edge when that context is in focus.
+  const requests = c4Of(lab, "context", { systems: [], contexts: ["Requests"] });
+  assert.deepEqual(requests.edges.find((e) => e.from === "system:Hospital information system")!.patterns, ["anticorruption-layer"]);
+});
+
+test("a focus of several (ADR 0036): an external system in parts, a context across two systems; names checked", () => {
+  const scanners = c4Of(lab, "container", { systems: ["Scanners"], contexts: [] });
+  assert.deepEqual(scanners.nodes.map((n) => `${n.name}${n.focus ? "*" : ""}${n.external ? " (external)" : ""}`),
+    ["Clinic app* (external)", "Courier app* (external)", "Bench scanner* (external)", "Lab"]);
+  assert.deepEqual(scanners.boundaries, [{ name: "Scanners", external: true, note: "the scanner vendor — at the clinic, in the courier's hand, at the bench" }]);
+
+  // Two focused at once: the edge between them is drawn, both filled.
+  const both = c4Of(lab, "context", { systems: ["Lab", "Patient portal"], contexts: [] });
+  assert.ok(both.nodes.filter((n) => n.focus).length === 2 && both.edges.some((e) => e.from === "system:Patient portal" && e.to === "system:Messaging"));
+
+  // A context spanning two systems (ADR 0018 §1) is a box in each.
+  const spread = loadModel(withSystems(`systems:
+  Front: { context: Shared, subsystems: { Desk: { packages: [Requests, Steps] }, Yard: { packages: [Sites, Transfers, Samples, Deviations, Cool boxes], context: Moving } } }
+  Back: { context: Shared, packages: [Analysis] }
+  Portal: { external: true, packages: [Patient] }`));
+  const shared = c4Of(spread, "context", { systems: [], contexts: ["Shared"] });
+  assert.deepEqual(shared.nodes.filter((n) => n.focus).map((n) => n.id), ["context:Front/Shared", "system:Back"], "Back is all Shared: one box; Front only in part");
+  assert.ok(shared.nodes.some((n) => n.id === "subsystem:Front/Yard" && !n.focus), "Front's other part, by name");
+
+  assert.throws(() => c4Of(lab, "context", { systems: ["Labb"], contexts: [] }), /no system called `Labb`/);
+  assert.throws(() => c4Of(lab, "context", { systems: [], contexts: ["Bench"] }), /no bounded context called `Bench`/);
+  assert.throws(() => c4Of(lab, "context", { systems: [], contexts: [] }), /name a system or a bounded context/);
 });
