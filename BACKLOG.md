@@ -82,6 +82,17 @@ Status is one of `open`, `claimed — …`, `blocked — <on what>`.
 - **done when:** the page is usable while a large domain loads, as the Flow board already is while its
   runs are made (`runs.ts`); measured on a domain of about 200 scenarios.
 
+### B-22 A C4 view with many neighbours, readable and not too wide
+- **status:** open
+- **why:** ELK places each edge label in the gap between layers, which keeps it clear of the U and D,
+  and the label names the first message and how many more. That is about 2,500 px wide for a focus
+  with nine neighbours in a real model, and 3,750 px for one with fourteen. B-21 placed the labels itself, near
+  the neighbour's end, and wrapped the rows at four: narrower, but the labels covered the U and D. It
+  was reverted. With ELK's labels, rows of four do not help, since the labels set the width (measured:
+  the same or a little wider).
+- **next:** labels off the layer gaps without covering the ends, e.g. ELK's label placement at the head
+  or tail with the U and D moved inward, or a label per side of the focus.
+
 ## Later — on the roadmap, not yet started
 
 - **B-8 The board view:** EventStorming stickies laid out as a board, clickable to run before it is
