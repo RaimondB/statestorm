@@ -7,7 +7,7 @@
  */
 import type { LogEntry } from "./log.ts";
 import type { Json, Model, SubsystemDef, TransitionDef } from "./types.ts";
-import { choiceOfEvent, mid, narrowedBy, ownersOfType, PERSON, placeOf, receiversOfEvent, senderOfCommand, SystemsError, transitionsOf } from "./systems.ts";
+import { choiceOfEvent, eventsRaisedBy, mid, narrowedBy, ownersOfType, PERSON, placeOf, receiversOfEvent, senderOfCommand, SystemsError, transitionsOf } from "./systems.ts";
 
 // ------------------------------------------------------------------ the lifelines (§7)
 
@@ -18,7 +18,8 @@ export const DEPTHS: Depth[] = ["domain", "system", "subsystem", "aggregate"];
 export interface Lifeline {
   id: string;
   name: string;
-  kind: "person" | "domain" | "system" | "subsystem" | "aggregate" | "none";
+  /** `policies`: the reactions a part runs for others — a third part's (ADR 0038). */
+  kind: "person" | "domain" | "system" | "subsystem" | "aggregate" | "policies" | "none";
   external?: boolean;
   /** The node it is drawn inside, when that node is open; absent at the top. */
   parent?: string;
@@ -53,11 +54,14 @@ export function lifelinesOf(model: Model): Lifelines {
     (typesIn.get(key) ?? typesIn.set(key, []).get(key)!).push(m.name);
   }
   const subsOf = new Map<string, string[]>();
+  const between = partsBetween(model);
   for (const sub of sys.subsystems) {
     const band = sub.context !== sub.system ? sub.context : undefined;
     const opens = !sub.external || (!(sub.sends?.length) && !(sub.receives?.length));
     const types = opens ? typesIn.get(`${sub.system}/${sub.name}`) ?? [] : [];
     const children = types.map((t) => put({ id: `aggregate:${t}`, name: t, kind: "aggregate", children: [], ...(sub.external ? { external: true } : {}), ...(band ? { band } : {}) }));
+    // ADR 0038: opened into its aggregates, a part that runs a policy for two others shows it a lifeline.
+    if (children.length > 0 && between.has(sub.name)) children.push(put({ id: `policies:${sub.system}/${sub.name}`, name: "policies", kind: "policies", children: [], ...(band ? { band } : {}) }));
     const id = put({ id: `subsystem:${sub.system}/${sub.name}`, name: sub.name, kind: "subsystem", children, ...(sub.external ? { external: true } : {}), ...(band ? { band } : {}) });
     (subsOf.get(sub.system) ?? subsOf.set(sub.system, []).get(sub.system)!).push(id);
   }
@@ -79,6 +83,30 @@ export function lifelinesOf(model: Model): Lifelines {
   const walk = (id: string) => { for (const c of nodes[id]!.children) { nodes[c]!.parent = id; walk(c); } };
   for (const r of roots) walk(r);
   return { nodes, roots };
+}
+
+/** A literal type a policy's rule commands, or the referrer type it walks: what it reaches, statically. */
+function reached(t: TransitionDef): string | undefined {
+  return t.forEachReferrer?.type ?? (t.command ? /^([A-Za-z_][A-Za-z0-9_]*)#/.exec(t.command.target)?.[1] : undefined);
+}
+
+/**
+ * ADR 0038: the parts named to run a policy (`in: <part>`) that neither raise what it hears nor hold what
+ * it commands — a third part, between two others. Opened into its aggregates, it needs a lifeline for it.
+ */
+function partsBetween(model: Model): Set<string> {
+  const out = new Set<string>();
+  const raisers = new Map<string, string[]>();
+  for (const a of Object.values(model.aggregates)) if (!a.abstract) for (const e of eventsRaisedBy(a)) raisers.set(e, [...(raisers.get(e) ?? []), a.name]);
+  const sub = (type: string) => placeOf(model, type)?.subsystem;
+  for (const p of Object.values(model.policies)) {
+    if (!p.runsIn || p.runsIn === "target" || p.runsIn === "source") continue;
+    const ts = transitionsOf(p);
+    const heard = Object.values(p.states).flatMap((st) => Object.keys(st.on)).map((k) => k.split("#")[0]!);
+    const sides = [...heard.flatMap((e) => raisers.get(e) ?? []), ...ts.map(reached).filter((x): x is string => !!x)].map(sub);
+    if (!sides.includes(p.runsIn)) out.add(p.runsIn);
+  }
+  return out;
 }
 
 /** Every node opened down to `depth`: what the levels of ADR 0018 were, as a starting point. */
@@ -202,6 +230,10 @@ interface Fact {
   parent: number;
   /** The policy firing that sent it, when its rule iterates. */
   loop?: { seq: number; label: string };
+  /** A hop's policy firing, and what it heard and sent apart — drawn apart where the policy runs (ADR 0038). */
+  firing?: number;
+  heard?: string;
+  sent?: string;
   ignored: boolean;
   what: { event?: string; command?: string; policy?: string; choice?: Choice; ids?: true };
 }
@@ -266,10 +298,12 @@ function factsOf(model: Model, log: LogEntry[]): Fact[] {
       let hop: Extract<LogEntry, { kind: "event" }> | undefined;
       let loop: Fact["loop"];
       let policy: string | undefined;
+      let firing: number | undefined;
       while (c) {
         if (c.kind === "command") break;
         if (c.kind === "policy") {
           policy = typeOfInstance(c.instance);
+          firing = c.seq;
           const label = loopOf(model, c);
           if (label) loop = { seq: c.seq, label };
           let ev = bySeq.get(c.cause);
@@ -281,7 +315,9 @@ function factsOf(model: Model, log: LogEntry[]): Fact[] {
       }
       if (hop) {
         const ev = shown(model, hop.event, hop.payload as Record<string, Json>, []);
-        out.push({ ...base, kind: "hop", fromType: typeOfInstance(hop.instance), label: `${hop.event}${ev.text ? ` · ${ev.text}` : ""} → ${named}`, style: "event", ...(loop ? { loop } : {}), what: { event: hop.event, command: `${type}.${e.name}`, ...(policy ? { policy } : {}), ...(said.ids ? { ids: true as const } : {}) } });
+        const heard = `${hop.event}${ev.text ? ` · ${ev.text}` : ""}`;
+        out.push({ ...base, kind: "hop", fromType: typeOfInstance(hop.instance), label: `${heard} → ${named}`, style: "event", ...(loop ? { loop } : {}),
+          ...(firing !== undefined ? { firing } : {}), heard, sent: named, what: { event: hop.event, command: `${type}.${e.name}`, ...(policy ? { policy } : {}), ...(said.ids ? { ids: true as const } : {}) } });
       } else out.push({ ...base, kind: "inside", fromType: type, label: named, style: "command" });
     } else if (e.kind === "event") {
       // Told only to the parts whose values the payload matches (ADR 0031); where the payload chooses,
@@ -383,6 +419,24 @@ export function sequenceOf(model: Model, log: LogEntry[], view: SequenceView, ma
     return !p.external && open.has(at) && (nodes[at]?.children.length ?? 0) > 0 ? to : at;
   };
 
+  /**
+   * ADR 0038: the lifeline of the part a placed policy runs in, for this hop — as the context map
+   * places it (ADR 0035). `target`: the part it commands; `source`: the part that raised the event; a
+   * part by name: on the type it serves there, or, run for two others, that part's own policies.
+   */
+  const homeOf = (f: Fact): string | undefined => {
+    const runs = f.what.policy ? model.policies[f.what.policy]?.runsIn : undefined;
+    if (!runs || !f.fromType || !f.toType) return undefined;
+    if (runs === "target") return leafOfType(f.toType);
+    if (runs === "source") return leafOfType(f.fromType);
+    if (placeOf(model, f.toType)?.subsystem === runs) return leafOfType(f.toType);
+    if (placeOf(model, f.fromType)?.subsystem === runs) return leafOfType(f.fromType);
+    const part = model.systems!.subsystems.find((x) => x.name === runs);
+    if (!part) return undefined;
+    const own = `policies:${part.system}/${part.name}`;
+    return reachable(lines, own) ? own : leafOfPart(part);
+  };
+
   // Which arrows cross, at this opening.
   const facts = factsOf(model, log);
   const drawn = new Map<string, Raw>();
@@ -390,18 +444,36 @@ export function sequenceOf(model: Model, log: LogEntry[], view: SequenceView, ma
   let hiddenIgnored = 0;
   const insides: { parent: number; over: string; seq: number }[] = [];
   const parentOf = new Map<number, number>();
+  // A policy run between two lifelines: what it heard, one arrow per firing, and what it sent under it.
+  const heardParent = new Map<string, number>();
+  const underHeard = new Map<string, string>();
   for (const f of facts) {
     if (f.kind !== "tell") parentOf.set(f.seq, f.parent);
     const to = visible(f.toPart ? leafOfPart(f.toPart) : leafOfType(f.toType!));
     const from = f.kind === "input" ? (f.fromPart ? fromPart(f.fromPart, to) : PERSON) : visible(leafOfType(f.fromType!));
+    const home = f.kind === "hop" ? homeOf(f) : undefined;
+    const via = home !== undefined ? visible(home) : undefined;
     const crosses = f.kind === "input" || from !== to;
     if (f.ignored && !view.ignored) { if (crosses) hiddenIgnored++; continue; }
     if (!crosses) {
       if (f.kind !== "tell") insides.push({ parent: f.parent, over: to, seq: f.seq });
       continue;
     }
+    // Run where it was raised: the event stays inside, the command crosses (ADR 0038).
+    const sentFromHome = via !== undefined && via !== to;
+    if (sentFromHome && via !== from && f.firing !== undefined) {
+      // Run by a third: the event to it, then the command from it.
+      const hk = `h${f.firing}`;
+      if (!drawn.has(hk)) {
+        drawn.set(hk, { seq: f.firing, from, to: via, label: f.heard!, style: "event", instance: f.instance, input: false,
+          what: { ...(f.what.event ? { event: f.what.event } : {}), ...(f.what.policy ? { policy: f.what.policy } : {}) }, inside: new Map(), children: [] });
+        heardParent.set(hk, f.parent);
+      }
+      underHeard.set(f.key, hk);
+    }
     drawn.set(f.key, {
-      seq: f.seq, from, to, label: f.label, style: f.style, instance: f.instance, input: f.kind === "input", what: f.what,
+      seq: f.seq, from: sentFromHome ? via : from, to, label: sentFromHome ? f.sent! : f.label, style: sentFromHome ? "command" : f.style,
+      instance: f.instance, input: f.kind === "input", what: f.what,
       ...(f.loop ? { loop: f.loop } : {}), inside: new Map(), children: [],
     });
     if (f.kind !== "tell") drawnCommand.add(f.seq);
@@ -414,7 +486,9 @@ export function sequenceOf(model: Model, log: LogEntry[], view: SequenceView, ma
   const roots: Raw[] = [];
   const factOf = new Map(facts.map((f) => [f.key, f]));
   for (const [key, raw] of drawn) {
-    const a = anchor(factOf.get(key)!.parent);
+    const heard = underHeard.get(key);
+    if (heard) { drawn.get(heard)!.children.push(raw); continue; }
+    const a = anchor(heardParent.get(key) ?? factOf.get(key)!.parent);
     if (a === 0) roots.push(raw);
     else drawn.get(`c${a}`)!.children.push(raw);
   }
