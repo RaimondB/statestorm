@@ -30,6 +30,13 @@ keep a model honest under at-least-once, unordered delivery.
   type's package says which system owns the shared definition. A vendor's system that runs logic the
   model specifies is `external: true` with `packages:`; `sends:` narrowed by payload tells several
   senders of one command apart.
+  A part that is known and owned but whose logic is not modelled yet is declared with `packages: []`
+  on purpose (ADR 0037): it is drawn, marked *not modelled yet*, and filled in a later round. Never
+  invent a package to give it one.
+- **Show a team its part** with the C4 view (ADR 0036): the systems and bounded contexts in focus, and
+  only what they exchange messages with, as a system context or container diagram — in the workbench,
+  or `statestorm c4 <domain> --system=… --context=… [--diagram=container]` as Mermaid. A grouping that
+  looks wrong there is a question for the domain owner, then a change to `systems:` and `contexts:`.
 - **A policy runs in a part** (ADR 0035), and that decides who depends on whom: `in: <sub-system>`, or
   `in: target` (each part it commands runs it for its own types: they hear the event) or `in: source`
   (each part raising the event runs it: it sends the command). A part hearing another's event, or
