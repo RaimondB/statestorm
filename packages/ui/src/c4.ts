@@ -5,10 +5,12 @@
  */
 import type { ElkExtendedEdge, ElkNode } from "elkjs/lib/elk-api";
 import type { C4Boundary, C4Node, C4View, MapEdge } from "@statestorm/kernel";
-import { estimate, type Measure } from "./chart-layout.ts";
+import { estimate, type Box, type Measure } from "./chart-layout.ts";
 import type { PlacedEdge } from "./context-map.ts";
 
-export const C4 = { pad: 12, line: 16, minW: 170, noteW: 230, noteLines: 3, boundaryTop: 30, /** Room either side of a name for the ◎ in its corner. */ toggle: 18 };
+export const C4 = { pad: 12, line: 16, minW: 170, noteW: 230, noteLines: 3, boundaryTop: 30, /** Room either side of a name for the ◎ in its corner. */ toggle: 18,
+  /** Neighbours side by side in a row, above the focus or below it; more wrap to the next row. */ perRow: 4,
+  /** How far along an edge, from the neighbour's end, its label first tries to sit; the step it moves on by while it covers something, and how often. */ labelAt: 30, labelStep: 14, labelTries: 24 };
 
 export interface PlacedC4Node extends C4Node { x: number; y: number; width: number; height: number; lines: string[]; notes: string[] }
 export interface PlacedBoundary extends C4Boundary { x: number; y: number; width: number; height: number }
@@ -39,14 +41,41 @@ export function wrap(text: string | undefined, width: number, measure: Measure, 
   return out.length > max ? [...out.slice(0, max - 1), `${out[max - 1]}…`] : out;
 }
 
-/** An edge's label: its patterns, and the first of what crosses it — the full lists are in its tooltip. */
+/** An edge's label: its patterns, and the first of what crosses it with how many more — the full lists are in its tooltip and the inspector. */
 export function c4LabelOf(e: MapEdge): string {
   const said = [...e.events, ...e.commands.filter((c) => !e.events.includes(c)).map((c) => `${c}()`)];
-  return [...e.patterns.map((p) => `«${p}»`), [said.slice(0, 2).join(", "), said.length > 2 ? `+${said.length - 2}` : ""].filter(Boolean).join(" ")]
+  return [...e.patterns.map((p) => `«${p}»`), [said[0] ?? "", said.length > 1 ? `+${said.length - 1}` : ""].filter(Boolean).join(" ")]
     .filter(Boolean).join(" ");
 }
 
+type Point = { x: number; y: number };
+/** The point `d` along a polyline from its first point — its last, if the line is shorter. */
+export function along(points: Point[], d: number): Point {
+  let left = d;
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1]!, b = points[i]!, len = Math.hypot(b.x - a.x, b.y - a.y);
+    if (len >= left && len > 0) return { x: a.x + ((b.x - a.x) * left) / len, y: a.y + ((b.y - a.y) * left) / len };
+    left -= len;
+  }
+  return points[points.length - 1] ?? { x: 0, y: 0 };
+}
+
 const boundaryId = (name: string) => `boundary:${name}`;
+
+/**
+ * Hidden edges that wrap a long row of neighbours (laid out, never drawn): of the neighbours laid above
+ * the focus, every one after the first few is pushed a row nearer to it; below, a row further away.
+ * Without them every neighbour that only sends to the focus sits in one row, as wide as all of them.
+ */
+export function rowBreaks(view: C4View, perRow = C4.perRow): ElkExtendedEdge[] {
+  const from = (e: MapEdge) => (upward(e) ? e.to : e.from), to = (e: MapEdge) => (upward(e) ? e.from : e.to);
+  const free = view.nodes.filter((n) => !n.boundary && !n.focus);
+  const above = free.filter((n) => view.edges.some((e) => from(e) === n.id) && !view.edges.some((e) => to(e) === n.id));
+  const below = free.filter((n) => view.edges.some((e) => to(e) === n.id) && !view.edges.some((e) => from(e) === n.id));
+  const out: ElkExtendedEdge[] = [];
+  for (const row of [above, below]) for (let i = 0; i + perRow < row.length; i++) out.push({ id: `row${out.length}`, sources: [row[i]!.id], targets: [row[i + perRow]!.id] });
+  return out;
+}
 
 export async function layoutC4(view: C4View, measure: Measure = estimate): Promise<C4Layout> {
   const { default: ELK } = await import("elkjs/lib/elk.bundled.js");
@@ -69,8 +98,6 @@ export async function layoutC4(view: C4View, measure: Measure = estimate): Promi
       "elk.edgeRouting": "POLYLINE",
       "elk.layered.spacing.nodeNodeBetweenLayers": "70",
       "elk.spacing.nodeNode": "48",
-      "elk.spacing.edgeLabel": "6",
-      "elk.edgeLabels.inline": "false",
       "elk.padding": "[top=20,left=20,bottom=20,right=20]",
     },
     children: [
@@ -83,10 +110,12 @@ export async function layoutC4(view: C4View, measure: Measure = estimate): Promi
       })),
       ...sized.filter((n) => !n.boundary).map(leaf),
     ],
-    edges: view.edges.map((e, i): ElkExtendedEdge => {
-      const text = c4LabelOf(e);
-      return { id: `e${i}`, sources: [upward(e) ? e.to : e.from], targets: [upward(e) ? e.from : e.to], labels: text ? [{ id: `l${i}`, text, width: measure(text, "label") + 8, height: 16 }] : [] };
-    }),
+    // No labels for ELK: in a layered layout each label is a box of its own in the layer between, and a
+    // focus with many neighbours grew several times wider for them. They are placed after (below).
+    edges: [
+      ...view.edges.map((e, i): ElkExtendedEdge => ({ id: `e${i}`, sources: [upward(e) ? e.to : e.from], targets: [upward(e) ? e.from : e.to] })),
+      ...rowBreaks(view),
+    ],
   };
   const out = await elk.layout(graph);
   const at = new Map<string, ElkNode>();
@@ -101,13 +130,29 @@ export async function layoutC4(view: C4View, measure: Measure = estimate): Promi
   const laidEdges: ElkExtendedEdge[] = [];
   const edgesOf = (n: ElkNode) => { laidEdges.push(...((n.edges ?? []) as ElkExtendedEdge[])); for (const c of n.children ?? []) edgesOf(c); };
   edgesOf(out);
+  // A label sits on its edge a little way from the neighbour's end, where the edges of different
+  // neighbours are still apart. Where it would cover a label already placed, or a box, it moves on
+  // along its line, a step at a time.
+  const focused = new Set(view.nodes.filter((n) => n.focus).map((n) => n.id));
+  const taken: Box[] = nodes.map((n) => ({ x: n.x, y: n.y, width: n.width, height: n.height }));
+  const overlaps = (a: Box) => taken.some((b) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height);
   const edges: PlacedEdge[] = view.edges.map((e, i) => {
     const laid = laidEdges.find((x) => x.id === `e${i}`);
     const s = laid?.sections?.[0];
     const laidOut = s ? [s.startPoint, ...(s.bendPoints ?? []), s.endPoint] : [];
     const points = upward(e) ? laidOut.reverse() : laidOut;
-    const l = laid?.labels?.[0];
-    return { ...e, points, ...(l && l.text ? { label: { x: l.x ?? 0, y: l.y ?? 0, width: l.width ?? 0, height: l.height ?? 0, text: l.text } } : {}) };
+    const text = c4LabelOf(e);
+    if (!text || points.length < 2) return { ...e, points };
+    const fromNeighbour = !focused.has(e.from) || focused.has(e.to);
+    const line = fromNeighbour ? points : [...points].reverse();
+    const width = measure(text, "label") + 8;
+    const at = (k: number) => { const p = along(line, C4.labelAt + C4.labelStep * k); return { x: p.x + 2, y: p.y - 8, width, height: 16 }; };
+    let label = at(0);
+    for (let k = 1; k <= C4.labelTries && overlaps(label); k++) label = at(k);
+    taken.push(label);
+    return { ...e, points, label: { ...label, text } };
   });
-  return { width: out.width ?? 0, height: out.height ?? 0, nodes, boundaries, edges };
+  // A label near the right edge may reach past what ELK laid out: the page grows to hold it.
+  const width = Math.max(out.width ?? 0, ...edges.map((e) => (e.label ? e.label.x + e.label.width + 12 : 0)));
+  return { width, height: out.height ?? 0, nodes, boundaries, edges };
 }
