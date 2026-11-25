@@ -43,6 +43,10 @@ keep a model honest under at-least-once, unordered delivery.
   sending it a command, is downstream of it. Two parts that each hear the other are a cycle the check
   warns of. To break it, let them both hear a third that tells them (the sample everyone hears),
   not each other. Where a policy runs is the domain owner's decision, like a type's owner.
+  Lean towards least coupling of business logic (ADR 0038): on a **fan-in** (many senders trigger the
+  same command at one target) the triggering parties own it, `in: source`; on a **fan-out** (one sender,
+  many consumers) each consumer does, `in: target`. The sequence, the map and the C4 view all draw a
+  placed policy where it runs.
 - **A new type is a decision, not a convenience.** Its kind and its owner are the domain owner's to
   decide, before it is written (skill `domain-session`): an **aggregate** because people or policies
   tell it things directly and it is consistent on its own; an **entity** because it has no life
