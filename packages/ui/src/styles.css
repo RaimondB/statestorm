@@ -296,6 +296,9 @@ ol.log .chain { grid-column: 4; font-size: 0.85rem; color: var(--muted); }
 .ov-side { display: flex; flex-direction: column; gap: 6px; padding: 10px; border-right: 1px dashed var(--line); overflow: auto; }
 .ov-unit { display: flex; flex-direction: column; align-items: flex-start; gap: 0; background: #357e50; color: #fff; border: 2px solid transparent; border-radius: 6px; padding: 4px 10px; min-width: 4.5em; }
 .ov-unit small { opacity: 0.85; font-size: 0.72rem; }
+/* ADR 0039: a side unit in its type's colour, when the model names one */
+.ov-unit.f-navy { background: #1d4a85; } .ov-unit.f-green { background: #2a6e43; } .ov-unit.f-blue { background: #1b5f97; } .ov-unit.f-teal { background: #1b7a85; } .ov-unit.f-purple { background: #5e4492; } .ov-unit.f-amber { background: #8e5a0c; } .ov-unit.f-grey { background: #55534e; }
+.ov-unit .ov-unit-label { font-style: italic; text-align: left; max-width: 14em; }
 .ov-unit.on { border-color: var(--fg); box-shadow: 0 0 0 2px var(--surface) inset; }
 /* min-width: 0, or on a phone (no grid column to hold it) the canvas grows to the whole
    journey's width and pushes the page sideways instead of scrolling. */

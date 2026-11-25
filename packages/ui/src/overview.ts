@@ -493,7 +493,9 @@ export interface Overview {
   roots: Box[];
   /** The lane under the roots: what stands apart from them (`exceptions:`). */
   exceptions: Box[];
-  side: InstanceView[];
+  /** ADR 0039: a unit in the side lane says its type's `label:`, as a box does — empty, it says
+   *  nothing — and takes its type's `color:` when the model names one. */
+  side: Array<InstanceView & { label?: string; family?: Family }>;
   /** Parentless instances that are neither roots nor in the side lane — listed, not hidden. */
   others: InstanceView[];
   stickies: Record<string, Sticky[]>;
@@ -724,7 +726,11 @@ export function buildOverview(model: Model, frame: Frame, log: LogEntry[], confi
   }
 
   const parentless = all.filter((i) => !parentOf(i));
-  const side = parentless.filter(inSide);
+  const side = parentless.filter(inSide).map((i) => {
+    const { label } = labelFor(model, i, config);
+    const family = [i.machine, ...(model.aggregates[i.machine]?.ancestors ?? [])].map((t) => config.color[t]).find((f) => f !== undefined);
+    return { ...i, ...(label ? { label } : {}), ...(family ? { family } : {}) };
+  });
   const candidates = parentless.filter((i) => !inSide(i) && !hidden(i) && !onTop(i) && !isException(i) && !matches(model, i.machine, config.omit));
   const rootList = config.roots ? candidates.filter((i) => matches(model, i.machine, config.roots!)) : candidates;
   const others = config.roots ? candidates.filter((i) => !matches(model, i.machine, config.roots!)) : [];

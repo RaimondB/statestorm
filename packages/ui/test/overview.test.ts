@@ -55,6 +55,8 @@ test("the request: a route over a sequence of steps over their tasks", () => {
     ] }],
   }], "handlings are folded, not drawn, and named by the sample each was about");
   assert.deepEqual(overview.side.map((s) => s.key), ["Sample#S1", "Sample#S2"], "what is scanned is in the side lane");
+  assert.deepEqual(overview.side.map((s) => [s.label, s.family]), [["for R1", undefined], ["for R1", undefined]],
+    "a side unit says its type's label (ADR 0039); no colour named for it, none taken");
   assert.deepEqual(overview.others, [], "deviations and links are omitted by the model's own `omit`");
 });
 
@@ -650,4 +652,14 @@ overview:
     "overview.views.Vans.under.Box: Box has no field `rn`",
     "overview.views.Vans.badges: `request` — expected roots",
   ]);
+});
+
+test("ADR 0039: a side unit takes its type's label and colour; an empty label says nothing", () => {
+  const sc = scenario("lab/01-two-tubes-to-the-lab.yaml");
+  const r = play(lab, actionsOf(sc), sc.schedule ?? fifo, sc.given.at);
+  const { config } = overviewConfig(lab);
+  const coloured = { ...config, color: { ...config.color, Sample: "teal" as const }, label: { ...config.label, Sample: "${missing}" } };
+  const frame = r.frames[r.frames.length - 1]!;
+  const side = buildOverview(lab, { ...frame, instances: Object.fromEntries(Object.entries(frame.instances).map(([k, v]) => [k, k.startsWith("Sample#") ? { ...v, data: { ...v.data, missing: "" } } : v])) }, r.world.log, coloured).side;
+  assert.deepEqual(side.map((s) => [s.key, s.label, s.family]), [["Sample#S1", undefined, "teal"], ["Sample#S2", undefined, "teal"]]);
 });

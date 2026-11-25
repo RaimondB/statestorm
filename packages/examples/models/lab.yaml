@@ -157,6 +157,7 @@ overview:
     Analysis: "${department} at ${site}"
     Task: "${kind}"
     PatientView: "what the patient sees · ${id}"
+    Sample: "for ${request}"               # in the side lane, under its id and state (ADR 0039)
   events:
     hide: ["*Planned", RequestCreated, RequestCompleted, RequestFailed, SampleStopped, SampleHalted, PatientInformed,
            DeviationPending, DeviationResolved, DeviationConfirmed]

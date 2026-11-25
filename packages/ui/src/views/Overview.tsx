@@ -156,11 +156,12 @@ export function Overview({ model, run, index, since, selection, select, onIndex,
             {overview.side.map((s) => {
               const path = s.config[0] ?? [];
               return (
-                <button key={s.key} className={`ov-unit${unit === s.key ? " on" : ""}${ctx.selected === s.key ? " selected" : ""}`}
+                <button key={s.key} className={`ov-unit${s.family ? ` f-${s.family}` : ""}${unit === s.key ? " on" : ""}${ctx.selected === s.key ? " selected" : ""}`}
                   title="Show only where this one travels"
                   onClick={() => { setUnit(unit === s.key ? undefined : s.key); select({ kind: "instance", key: s.key }); }}>
                   <b>{s.key.slice(s.key.indexOf("#") + 1)}</b>
                   <small>{stateWords(path)}</small>
+                  {s.label && <small className="ov-unit-label">{s.label}</small>}
                 </button>
               );
             })}
