@@ -91,15 +91,6 @@ Status is one of `open`, `claimed — …`, `blocked — <on what>`.
 - **done when:** a placed policy is drawn as the event to the part that runs it and the command from
   there; a lab scenario where a third part runs it shows both arrows; unplaced policies are drawn as today.
 
-### B-19 A part in focus: C4 system context and container diagrams
-- **status:** claimed — Claude (for raimondb), b19-c4-focus, 2026-11-25
-- **why:** a team that works on one system or one bounded context wants a picture of its own part. The
-  context map draws the whole landscape at a level, and a context inside a larger system cannot be put
-  in the middle at all.
-- **done when:** ADR 0036; a C4 view in the workbench where the reader picks the systems and contexts
-  in focus and switches between a system context and a container diagram, kept in the link;
-  `statestorm c4` prints the same as Mermaid C4; tests on `lab`.
-
 ## Later — on the roadmap, not yet started
 
 - **B-8 The board view:** EventStorming stickies laid out as a board, clickable to run before it is

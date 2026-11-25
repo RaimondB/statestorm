@@ -203,7 +203,7 @@ through time; what they change stays in their browser. The bundled examples are 
 
 - **Leaving a view out:** `--without=context-map,sequence` shares the domain without those views —
   no tab for them, and nothing opens on them, so a view still taking shape is not shown before it is
-  ready. The views are `overview`, `journey`, `flow`, `structure`, `statecharts`, `context-map`, `sequence`, `docs`;
+  ready. The views are `overview`, `journey`, `flow`, `structure`, `statecharts`, `context-map`, `c4`, `sequence`, `docs`;
   `build` takes the flag too, and the workbench on the folder itself (`dev`) always shows them all.
   Put it in the domain repo's `share` script, so every share leaves the same views out.
 - **A meeting's scenarios — agendas** (ADR 0025): `agendas/<name>.yaml` in the domain names the
@@ -247,6 +247,12 @@ through time; what they change stays in their browser. The bundled examples are 
   each edge's ends **U** (upstream) and **D** (downstream), lays upstream above, and draws two parts that
   depend on each other as a warning. The check warns of such a cycle, of a declared relation the policies
   turn round, and, once one policy is placed, of those that are not.
+- **A part in focus, as C4** (ADR 0036): the **C4** view puts the systems and bounded contexts you pick in
+  the middle, with only the parts they exchange messages with, as a C4 *system context* or *container*
+  diagram. Pick the focus above it, or press **◎** on a box to pull a neighbour in or take a part out; a
+  context inside a larger system is drawn inside that system's boundary, beside the sibling parts it
+  talks to. *copy link* keeps the focus (`view=c4&diagram=container&systems=Lab&contexts=`), *copy Mermaid*
+  gives the diagram for a document, as `statestorm c4 . --diagram=container --context=Testing` does.
 - **The docs travel with it:** the domain's `docs/` sources — rules, glossary, questions, profile, the
   sessions' logs (not the generated rulebook) — go into the share, served site and *Open folder…* alike,
   for the **Docs** view (ADR 0016 §9): every topic and its rules, each rule linked to what cites it — a

@@ -158,7 +158,7 @@ test("statestorm share --without leaves views out of the file, and says so befor
   assert.equal(wrong.status, 2);
   assert.match(wrong.stderr, /no view called erd — the views are overview, journey, flow/);
   const every = spawnSync(process.execPath, [cli, "share", dir, `--out=${out}`,
-    "--without=overview,journey,flow,structure,statecharts,context-map,sequence,docs"], { encoding: "utf8" });
+    "--without=overview,journey,flow,structure,statecharts,context-map,c4,sequence,docs"], { encoding: "utf8" });
   assert.equal(every.status, 2);
   assert.match(every.stderr, /that is every view/);
 });
