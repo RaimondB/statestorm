@@ -9,6 +9,7 @@
  *   statestorm skills <domain folder> [--check] [--force]             the platform's skills and shared rules, copied in (ADR 0017)
  *   statestorm context-map <domain folder> [--level=system|context|subsystem] [--system=<name>]   Mermaid (ADR 0018)
  *   statestorm sequence <domain folder> <scenario> [--level=…] [--open=<names>] [--unfold] [--ignored]   a scenario as a sequence diagram, Mermaid (ADR 0022)
+ *   statestorm c4 <domain folder> [--diagram=context|container] [--system=<names>] [--context=<names>]   a part in focus, Mermaid C4 (ADR 0036)
  *   statestorm dev   <domain folder>... [--port=5181] [--name=<name>]   the workbench on these domains, read fresh on every load
  *   statestorm build <domain folder>... --out=<dir> [--name=<name>] [--without=<views>]   a static site, for any web server
  *   statestorm share <domain folder>... [--out=<dir/ or file.html>] [--name=<name>] [--examples] [--without=<views>] [--agenda=<name>]
@@ -38,7 +39,7 @@ import { VIEWS, type View } from "@statestorm/ui/domain";
 import { parseAgenda } from "@statestorm/ui/agenda";
 import { readDomain } from "./domains.ts";
 import { skills } from "./skills.ts";
-import { contextMapCommand, sequenceCommand } from "./architecture.ts";
+import { c4Command, contextMapCommand, sequenceCommand } from "./architecture.ts";
 import { ignored, platformCommit, sourceOf, stamp, type Source } from "./provenance.ts";
 
 // The prebuilt site: beside the bundled CLI, or the UI package's build in the repo.
@@ -54,6 +55,7 @@ const USAGE = `usage:
   statestorm skills <domain folder> [--check] [--force]
   statestorm context-map <domain folder> [--level=system|context|subsystem] [--system=<name>]
   statestorm sequence <domain folder> <scenario> [--level=domain|system|subsystem|aggregate] [--open=<name>,…] [--unfold] [--ignored]
+  statestorm c4 <domain folder> [--diagram=context|container] [--system=<name>,…] [--context=<name>,…]
   statestorm dev   <domain folder>... [--port=5181] [--name=<name>]
   statestorm build <domain folder>... --out=<dir> [--name=<name>] [--without=<views>]
   statestorm share <domain folder>... [--out=<dir/ or file.html>] [--name=<name>] [--examples] [--without=<views>] [--agenda=<name>]
@@ -239,7 +241,7 @@ function shareFile(out: string | undefined, name: string, exports: string): stri
 }
 
 const [command, ...rest] = process.argv.slice(2);
-const commands: Record<string, (args: string[]) => number | Promise<number>> = { test, check, docs, rules, skills, dev, build, share, "context-map": contextMapCommand, sequence: sequenceCommand };
+const commands: Record<string, (args: string[]) => number | Promise<number>> = { test, check, docs, rules, skills, dev, build, share, "context-map": contextMapCommand, sequence: sequenceCommand, c4: c4Command };
 const run = command ? commands[command] : undefined;
 if (!run) { console.error(USAGE); process.exit(2); }
 try {

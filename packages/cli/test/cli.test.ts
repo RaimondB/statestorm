@@ -375,6 +375,22 @@ test("statestorm sequence opens the lifelines it is told to, folds what repeats,
   assert.match(seq("--open=Nowhere").stderr, /Nowhere: no domain, system, sub-system or aggregate/);
 });
 
+test("statestorm c4 puts the systems and contexts it is told to in focus, as Mermaid C4 (ADR 0036)", () => {
+  const dir = labDomain();
+  const c4 = (...flags: string[]) => spawnSync(process.execPath, [cli, "c4", dir, ...flags], { encoding: "utf8" });
+  const context = c4("--system=Lab");
+  assert.equal(context.status, 0, context.stderr);
+  assert.match(context.stdout, /^C4Context\n  title System context of Lab\n  System\(system_Lab, "Lab"/);
+  assert.doesNotMatch(context.stdout, /Messaging/, "a system that never talks to the focus is left out");
+  const bench = c4("--diagram=container", "--context=Testing");
+  assert.match(bench.stdout, /^C4Container\n/);
+  assert.match(bench.stdout, /System_Boundary\(boundary_Lab, "Lab"\) \{\n    Container\(subsystem_Lab_Bench, "Bench"/);
+  assert.doesNotMatch(bench.stdout, /Ordering/, "a sibling part the bench never talks to is left out");
+  assert.equal(c4().status, 2, "nothing in focus");
+  assert.match(c4("--diagram=deployment", "--system=Lab").stderr, /--diagram=deployment: context or container/);
+  assert.match(c4("--context=Nowhere").stderr, /no bounded context called `Nowhere`/);
+});
+
 test("a domain's agendas are read with it, and are no part of the model (ADR 0025)", () => {
   const dir = labDomain();
   const d = readDomain(dir);

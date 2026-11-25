@@ -1,11 +1,11 @@
 /**
- * `statestorm context-map` and `statestorm sequence` (ADR 0018 §6): the context map of a domain's
+ * `statestorm context-map`, `statestorm sequence` and `statestorm c4` (ADR 0018 §6, ADR 0036): the context map of a domain's
  * model, and one of its scenarios as a sequence diagram, as Mermaid for documents — read from the
  * same derivation the workbench draws.
  */
 import {
-  contextMap, contextMapToMermaid, DEPTHS, lifelineNamed, lifelinesOf, loadModel, openAt, scopesOf, sequenceOf, sequenceToMermaid,
-  type Depth, type Level, type Model,
+  C4_DIAGRAMS, c4Of, c4ToMermaid, contextMap, contextMapToMermaid, DEPTHS, lifelineNamed, lifelinesOf, loadModel, openAt, scopesOf, sequenceOf, sequenceToMermaid,
+  type C4Diagram, type Depth, type Level, type Model,
 } from "@statestorm/kernel";
 import { parseScenario, runScenario } from "@statestorm/scenarios";
 import { readDomain } from "./domains.ts";
@@ -75,5 +75,24 @@ export function sequenceCommand(args: string[]): number {
   const run = runScenario(m, parseScenario(files[found[0]!]!, found[0], (p) => files[`scenarios/${p}`]), { kind: "fifo" });
   const view = { open: opened(m, args), fold: !args.includes("--unfold"), ignored: args.includes("--ignored") };
   process.stdout.write(sequenceToMermaid(sequenceOf(m, run.world.log, view, run.marks)));
+  return 0;
+}
+
+const C4_USAGE = "usage: statestorm c4 <domain folder> [--diagram=context|container] [--system=<name>,…] [--context=<name>,…]";
+
+/**
+ * `statestorm c4` (ADR 0036): the systems and bounded contexts named, and the parts they exchange
+ * messages with, as Mermaid's C4 system context (the default) or container diagram.
+ */
+export function c4Command(args: string[]): number {
+  const [dir] = plain(args);
+  if (!dir) { console.error(C4_USAGE); return 2; }
+  const diagram = flag(args, "diagram") ?? "context";
+  if (!(C4_DIAGRAMS as string[]).includes(diagram)) throw new Error(`--diagram=${diagram}: ${C4_DIAGRAMS.join(" or ")}`);
+  const names = (n: string) => (flag(args, n) ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+  const focus = { systems: names("system"), contexts: names("context") };
+  if (focus.systems.length + focus.contexts.length === 0) { console.error(`${C4_USAGE}\n  name at least one --system or --context to put in focus`); return 2; }
+  const { model: m } = model(dir);
+  process.stdout.write(c4ToMermaid(c4Of(m, diagram as C4Diagram, focus)));
   return 0;
 }
