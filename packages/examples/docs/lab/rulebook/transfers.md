@@ -10,7 +10,7 @@
 
 **Events out:** SampleStopped, SiteDescribed
 
-**Policies reacting:** analysis_site_described (on SiteDescribed); sample_stopped (on SampleStopped)
+**Policies reacting:** analysis_site_described (on SiteDescribed); report_stop (on SampleStopped)
 
 [All topics](index.md)
 

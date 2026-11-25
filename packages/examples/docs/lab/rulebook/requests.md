@@ -10,7 +10,7 @@
 
 **Events out:** RequestCompleted, RequestCreated, RequestFailed, RoutePlanned, SampleStopped
 
-**Policies reacting:** register_samples (on RequestCreated); open_patient_view (on RequestCreated); sample_stopped (on SampleStopped); patient_ready (on RequestCompleted); patient_redraw (on RequestFailed)
+**Policies reacting:** register_samples (on RequestCreated); open_patient_view (on RequestCreated); report_stop (on SampleStopped); patient_ready (on RequestCompleted); patient_redraw (on RequestFailed)
 
 [All topics](index.md)
 

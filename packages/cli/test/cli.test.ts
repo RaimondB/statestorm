@@ -158,7 +158,7 @@ test("statestorm share --without leaves views out of the file, and says so befor
   assert.equal(wrong.status, 2);
   assert.match(wrong.stderr, /no view called erd — the views are overview, journey, flow/);
   const every = spawnSync(process.execPath, [cli, "share", dir, `--out=${out}`,
-    "--without=overview,journey,flow,structure,statecharts,context-map,sequence,docs"], { encoding: "utf8" });
+    "--without=overview,journey,flow,structure,statecharts,context-map,c4,sequence,docs"], { encoding: "utf8" });
   assert.equal(every.status, 2);
   assert.match(every.stderr, /that is every view/);
 });
@@ -375,6 +375,22 @@ test("statestorm sequence opens the lifelines it is told to, folds what repeats,
   assert.match(seq("--open=Nowhere").stderr, /Nowhere: no domain, system, sub-system or aggregate/);
 });
 
+test("statestorm c4 puts the systems and contexts it is told to in focus, as Mermaid C4 (ADR 0036)", () => {
+  const dir = labDomain();
+  const c4 = (...flags: string[]) => spawnSync(process.execPath, [cli, "c4", dir, ...flags], { encoding: "utf8" });
+  const context = c4("--system=Lab");
+  assert.equal(context.status, 0, context.stderr);
+  assert.match(context.stdout, /^C4Context\n  title System context of Lab\n  System\(system_Lab, "Lab"/);
+  assert.doesNotMatch(context.stdout, /Messaging/, "a system that never talks to the focus is left out");
+  const bench = c4("--diagram=container", "--context=Testing");
+  assert.match(bench.stdout, /^C4Container\n/);
+  assert.match(bench.stdout, /System_Boundary\(boundary_Lab, "Lab"\) \{\n    Container\(subsystem_Lab_Bench, "Bench"/);
+  assert.doesNotMatch(bench.stdout, /Ordering/, "a sibling part the bench never talks to is left out");
+  assert.equal(c4().status, 2, "nothing in focus");
+  assert.match(c4("--diagram=deployment", "--system=Lab").stderr, /--diagram=deployment: context or container/);
+  assert.match(c4("--context=Nowhere").stderr, /no bounded context called `Nowhere`/);
+});
+
 test("a domain's agendas are read with it, and are no part of the model (ADR 0025)", () => {
   const dir = labDomain();
   const d = readDomain(dir);
@@ -442,4 +458,14 @@ test("statestorm dev on a port already in use says so and how to choose another"
   } finally {
     busy.close();
   }
+});
+
+test("check says in its Systems section where two parts depend on each other (ADR 0035)", () => {
+  const dir = labDomain();
+  const file = join(dir, "model.yaml");
+  // The stop heard step to step, as before the sample was its hub.
+  writeFileSync(file, readFileSync(file, "utf8").replace("    in: source\n    on: SampleStopped\n    command: \"Sample#${event.sample}.Stop\"",
+    "    in: target\n    on: SampleStopped\n    for_each_referrer: { via: Handling.sample, of: \"${event.sample}\" }\n    command: \"${item}.SampleStopped\""));
+  const out = spawnSync(process.execPath, [cli, "check", dir], { encoding: "utf8" }).stdout;
+  assert.match(out, /Systems \(ADR 0018, ADR 0020, ADR 0035\)\n(  .*\n)*  ! Bench and Ordering depend on each other — Bench through report_stop, Ordering through report_stop/);
 });

@@ -12,6 +12,7 @@ export type Selection =
   | { kind: "message"; event?: string; command?: string; policy?: string }
   /** A part of the landscape (ADR 0018, ADR 0020): a sub-system is named with its system. */
   | { kind: "place"; level: "domain" | "system" | "subsystem" | "context"; name: string; system?: string }
-  /** An edge of the context map: who tells whom what, and the patterns declared between them. */
-  | { kind: "flow"; from: string; to: string; events: string[]; commands: string[]; patterns: string[] }
+  /** An edge of the context map: who tells whom what, the patterns declared between them, and which
+   *  end depends on the other (ADR 0035). */
+  | { kind: "flow"; from: string; to: string; events: string[]; commands: string[]; patterns: string[]; policies?: string[]; downstream?: string[]; mutual?: boolean }
   | undefined;

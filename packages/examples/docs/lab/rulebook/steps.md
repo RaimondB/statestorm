@@ -10,7 +10,7 @@
 
 **Events out:** SampleStopped
 
-**Policies reacting:** sample_stopped (on SampleStopped)
+**Policies reacting:** report_stop (on SampleStopped)
 
 [All topics](index.md)
 
@@ -50,5 +50,5 @@ When every task of a step has ended, the latest stage that had work to do decide
 
 A task still waiting for a sample that failed earlier no longer expects it. A task none of whose samples reached it is not needed — not failed.
 
-- **Model:** `Task.created on_children handlings.all_final#not_needed`, `Handling.open on SampleStopped`, `sample_stopped`
+- **Model:** `Task.created on_children handlings.all_final#not_needed`, `Handling.open on SampleStopped`, `Sample.tracked on Stop`, `report_stop`, `sample_stopped`
 - **Shown by:** 04-stability-expired, 05-one-of-two-haemolysed

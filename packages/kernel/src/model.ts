@@ -503,8 +503,10 @@ function machine(name: string, raw: Raw, kind: MachineDef["kind"]): MachineDef {
     creators: (raw.creators ?? []).map(String),
     correlate: raw.correlate === undefined ? undefined : String(raw.correlate),
     why: whyOf(raw.why, name),
+    ...(kind === "policy" && raw.in !== undefined ? { runsIn: String(raw.in) } : {}),
     allChildTriggers: [],
   };
+  if (kind === "aggregate" && raw.in !== undefined) throw new ModelError(`${name}: \`in:\` says where a policy runs (ADR 0035); a type is placed by its package`);
   def.allChildTriggers = collectTriggers(states, []);
   checkTimerFields(def);
   checkPuts(def);
@@ -576,7 +578,7 @@ function policy(name: string, raw: Raw): MachineDef {
   for (const e of events) {
     on[e] = { command: raw.command, with: raw.with, for_each: raw.for_each, order: raw.order, where: raw.where, pairs: raw.pairs, for_each_referrer: raw.for_each_referrer };
   }
-  return machine(name, { initial: "ready", states: { ready: { on } }, correlate: raw.correlate, why: raw.why }, "policy");
+  return machine(name, { initial: "ready", states: { ready: { on } }, correlate: raw.correlate, why: raw.why, in: raw.in }, "policy");
 }
 
 /** ADR 0003: policies issue commands and never raise events. Caught at load, not at run. */
@@ -849,6 +851,10 @@ function modelOf(raw: Record<string, unknown>): Model {
   model.packages = packagesOf(raw.packages, model);
   try {
     const systems = systemsOf(raw.systems, raw.contexts, raw.relations, model, raw.domains, raw.roles);
+    if (!systems) {
+      const placed = Object.values(model.policies).find((p) => p.runsIn !== undefined);
+      if (placed) throw new ModelError(`${placed.name}: \`in: ${placed.runsIn}\` — the model declares no \`systems:\` to run it in (ADR 0035)`);
+    }
     if (systems) {
       model.systems = systems;
       model.findings.push(...systemFindings(model));

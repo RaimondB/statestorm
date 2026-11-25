@@ -84,6 +84,8 @@ export interface SubsystemDef {
   /** ADR 0030: what a part of our own works out itself, which the model does not run — a scenario sends the result in its name. */
   computes?: SystemSendDef[];
   note?: string;
+  /** ADR 0037: one of ours, declared with \`packages: []\` — none of its logic modelled yet. */
+  unmodelled?: boolean;
   why?: string[];
 }
 
@@ -339,6 +341,11 @@ export interface MachineDef {
   correlate?: string;
   /** ADR 0016: the ids of the domain's rules it implements, as written on it (not inherited). */
   why?: string[];
+  /**
+   * Policies only, ADR 0035: the sub-system it runs in, or `target` — each part it commands runs it for
+   * its own types. Absent: not placed.
+   */
+  runsIn?: string;
   /** Every child trigger anywhere in the machine, with the state that owns it. */
   allChildTriggers: { state: StatePath; trigger: ChildTrigger }[];
 }

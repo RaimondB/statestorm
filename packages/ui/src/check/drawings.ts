@@ -17,8 +17,8 @@
  *            boxes the drawing marks as telling the customer, compared with the runs
  */
 import { parse as parseYaml } from "yaml";
-import type { Model } from "@statestorm/kernel";
-import { eventNames } from "../overview.ts";
+import { isA, type LogEntry, type Model } from "@statestorm/kernel";
+import { eventNames, globMatch } from "../overview.ts";
 import type { FlowGraph } from "../flow.ts";
 
 export type Decision =
@@ -352,4 +352,29 @@ export function issuesMarkdown(issues: DrawingIssue[], titles: Record<string, st
     }
   }
   return lines.join("\n");
+}
+
+/**
+ * The statuses that led to telling the customer in one run: from each `notice` event, up its causes to
+ * the nearest status of a subject. An event that names a status — a deviation confirmed, carrying the
+ * status it reported — tells for that status: the person's confirmation is not the reason. A subject's
+ * own event that the overview hides is its plumbing, not a status (the subject telling every step,
+ * ADR 0035): it tells for the status it names, or the walk goes on past it.
+ */
+export function statusesTold(model: Model, log: LogEntry[], notice: string, subjectTypes: string[], statuses: Set<string>, hidden: string[]): Set<string> {
+  const told = new Set<string>();
+  const bySeq = new Map(log.map((e) => [e.seq, e]));
+  for (const e of log) {
+    if (e.kind !== "event" || e.event !== notice) continue;
+    for (let at = e.cause, hops = 0; at > 0 && hops < 60; hops++) {
+      const c = bySeq.get(at);
+      if (!c) break;
+      const plumbing = c.kind === "event" && hidden.some((p) => globMatch(p, c.event));
+      if (c.kind === "event" && !plumbing && subjectTypes.some((t) => isA(model, c.instance.slice(0, c.instance.indexOf("#")), t))) { told.add(c.event); break; }
+      const named = c.kind === "event" ? Object.values(c.payload).find((v) => typeof v === "string" && statuses.has(v)) : undefined;
+      if (typeof named === "string") { told.add(named); break; }
+      at = c.cause;
+    }
+  }
+  return told;
 }

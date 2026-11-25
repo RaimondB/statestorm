@@ -1,12 +1,12 @@
 import type { Selection } from "../selection.ts";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { contextMap, scopesOf, type Level, type Model } from "@statestorm/kernel";
-import { layoutMap, MAP, type MapLayout, type PlacedEdge } from "../context-map.ts";
+import { endsOf, layoutMap, MAP, type MapLayout, type PlacedEdge } from "../context-map.ts";
 import { estimate, type Measure } from "../chart-layout.ts";
 
 const FONTS = { title: "700 14px system-ui, sans-serif", label: "12px system-ui, sans-serif", small: "12px ui-monospace, monospace" };
 let ctx: CanvasRenderingContext2D | null | undefined;
-const measure: Measure = (text, font) => {
+export const measure: Measure = (text, font) => {
   ctx ??= document.createElement("canvas").getContext("2d");
   if (!ctx) return estimate(text, font);
   ctx.font = FONTS[font];
@@ -93,7 +93,9 @@ export function ContextMap({ model, select }: { model: Model; select: (s: Select
         <span className="ov-legend">
           <span><span className="map-key system" /> ours</span>
           <span><span className="map-key external" /> outside</span>
-          <span className="hint">upstream above, downstream below</span>
+          <span className="hint" title="Where a policy runs says who depends on whom (ADR 0035): the part that runs it is downstream of the parts it hears and commands">
+            <b className="map-end-key">U</b> upstream above, <b className="map-end-key">D</b> downstream below</span>
+          {map.map?.edges.some((e) => e.mutual) && <span><span className="map-key mutual" /> each depends on the other</span>}
         </span>
       </div>
       {(map.error || error) && <div className="error-box" style={{ margin: "6px 12px" }}>{map.error ?? `Layout failed: ${error}`}</div>}
@@ -107,15 +109,20 @@ export function ContextMap({ model, select }: { model: Model; select: (s: Select
               </marker>
             </defs>
             {layout.edges.map((e, i) => (
-              <g key={i} className={`map-edge${picked && picked.from === e.from && picked.to === e.to ? " picked" : ""}`} role="button"
-                onClick={(ev) => { ev.stopPropagation(); setPicked(e); select({ kind: "flow", from: e.from, to: e.to, events: e.events, commands: e.commands, patterns: e.patterns }); }}>
-                <title>{`${e.from} → ${e.to}${e.patterns.length ? ` (${e.patterns.join(", ")})` : ""}\nevents: ${e.events.join(", ") || "—"}\ncommands: ${e.commands.join(", ") || "—"}`}</title>
+              <g key={i} className={`map-edge${e.mutual ? " mutual" : ""}${picked && picked.from === e.from && picked.to === e.to ? " picked" : ""}`} role="button"
+                onClick={(ev) => { ev.stopPropagation(); setPicked(e); select({ kind: "flow", from: e.from, to: e.to, events: e.events, commands: e.commands, patterns: e.patterns, policies: e.policies, downstream: e.downstream, ...(e.mutual ? { mutual: true } : {}) }); }}>
+                <title>{`${e.from} → ${e.to}${e.patterns.length ? ` (${e.patterns.join(", ")})` : ""}${e.downstream.length ? `\ndownstream: ${e.downstream.join(" and ")}${e.mutual ? " — each depends on the other" : ""}` : ""}\nevents: ${e.events.join(", ") || "—"}\ncommands: ${e.commands.join(", ") || "—"}`}</title>
                 <path d={`M${e.points.map((p) => `${p.x},${p.y}`).join(" L")}`} className="map-line" markerEnd="url(#map-head)" />
                 {e.label && <text x={e.label.x + 4} y={e.label.y + 12} className="map-label">{e.label.text}</text>}
+                {endsOf(e).map((end, j) => (
+                  <g key={j} className={`map-end ${end.text === "U" ? "up" : "down"}`} transform={`translate(${end.x},${end.y})`}>
+                    <circle r={7.5} /><text y={4} textAnchor="middle">{end.text}</text>
+                  </g>
+                ))}
               </g>
             ))}
             {layout.nodes.map((n) => (
-              <g key={n.id} transform={`translate(${n.x},${n.y})`} className={`map-node ${n.kind}`} role="button"
+              <g key={n.id} transform={`translate(${n.x},${n.y})`} className={`map-node ${n.kind}${n.unmodelled ? " unmodelled" : ""}`} role="button"
                 onClick={(ev) => {
                   ev.stopPropagation();
                   setPicked(undefined);
